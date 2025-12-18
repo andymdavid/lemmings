@@ -38,7 +38,7 @@ export default class UIManager {
     }
 
     render(ctx, gameState) {
-        const { lemmingsSpawned, lemmingsDead, skills, selectedSkill, fps, deltaTime } = gameState;
+        const { lemmingsSpawned, lemmingsDead, lemmingsSaved, skills, selectedSkill, fps, deltaTime } = gameState;
 
         // Draw UI - Lemming counter (now pinned to top-right)
         ctx.fillStyle = '#f1f5f9';
@@ -48,9 +48,13 @@ export default class UIManager {
         const statsX = this.canvas.width - 20;
         ctx.fillText(`Out: ${lemmingsSpawned} / ${MAX_LEMMINGS}`, statsX, 20);
 
-        // Draw dead counter beneath stats
+        // Draw saved counter beneath stats
+        ctx.fillStyle = '#22c55e';
+        ctx.fillText(`Saved: ${lemmingsSaved}`, statsX, 50);
+
+        // Draw dead counter beneath saved
         ctx.fillStyle = '#ef4444';
-        ctx.fillText(`Dead: ${lemmingsDead}`, statsX, 50);
+        ctx.fillText(`Dead: ${lemmingsDead}`, statsX, 80);
 
         // Draw FPS counter (debug) in top-left
         ctx.fillStyle = '#f1f5f9';

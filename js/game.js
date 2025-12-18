@@ -50,9 +50,10 @@ terrain.initializeFromLevel(LEVEL_1);
 
 // Exit configuration
 const exitConfig = LEVEL_1.exit;
-const floorY = exitConfig.position.y + exitConfig.dimensions.height;
+// Position exit on the ground floor (y=640 from levels.js ground terrain)
+const floorY = 640;
 
-const SHOW_EXIT_PORTAL = false;
+const SHOW_EXIT_PORTAL = true;
 
 // Entrance and exit portals
 const entrance = new ParticleSystem(LEVEL_1.entrance.x, LEVEL_1.entrance.y, { theme: 'entrance' });
@@ -80,6 +81,7 @@ const lemmings = [];
 let spawnTimer = 0;
 let lemmingsSpawned = 0;
 let lemmingsDead = 0;
+let lemmingsSaved = 0;
 
 // Skill inventory
 const skills = {
@@ -264,6 +266,31 @@ function update(dt) {
         }
     });
 
+    // Check exit collision for lemmings
+    if (exitPortal) {
+        const exitBounds = {
+            x: exitConfig.position.x,
+            y: exitConfig.position.y,
+            width: exitConfig.dimensions.width,
+            height: exitConfig.dimensions.height
+        };
+
+        for (let i = lemmings.length - 1; i >= 0; i--) {
+            const lemming = lemmings[i];
+            // Only lemmings that are alive can exit
+            if (lemming.state !== STATES.DEAD && lemming.state !== STATES.SAVED) {
+                // Check if lemming's center point is inside exit bounds
+                if (isPointInBounds(lemming.x, lemming.y, exitBounds)) {
+                    lemming.state = STATES.SAVED;
+                    // Spawn exit particles
+                    exitPortal.spawnExitParticles(lemming.x, lemming.y);
+                    lemmings.splice(i, 1);
+                    lemmingsSaved++;
+                }
+            }
+        }
+    }
+
     // Remove dead lemmings after animation completes
     for (let i = lemmings.length - 1; i >= 0; i--) {
         if (lemmings[i].state === STATES.DEAD &&
@@ -319,6 +346,7 @@ function render() {
     const gameState = {
         lemmingsSpawned,
         lemmingsDead,
+        lemmingsSaved,
         skills,
         selectedSkill,
         fps,
