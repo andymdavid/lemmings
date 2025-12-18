@@ -15,6 +15,12 @@ import {
 const MAX_STEP_CLIMB = 4; // Pixels a walking lemming can climb when hitting a wall
 const BUILDER_STEP_WIDTH = 10;
 const BUILDER_STEP_HEIGHT = 2;
+const BUILDER_STEP_COLOR = {
+    r: COLORS.STEEL_RAMP_R,
+    g: COLORS.STEEL_RAMP_G,
+    b: COLORS.STEEL_RAMP_B
+};
+const BUILDER_STEP_COLOR_VARIATION = 12;
 
 export default class Lemming {
     constructor(x, y) {
@@ -51,7 +57,7 @@ export default class Lemming {
         // Building state
         this.buildStepCount = 0; // Number of steps built
         this.buildFrameCounter = 0; // Frames since last step placed
-        this.buildStepHeight = 0; // Current height of stairs built
+        this.buildStartY = 0; // Y position where building started
 
         // Bomber state
         this.bomberCountdown = -1; // -1 = not a bomber, 0-300 = countdown frames
@@ -208,9 +214,13 @@ export default class Lemming {
                 const stepWidth = BUILDER_STEP_WIDTH;
                 const stepHeight = BUILDER_STEP_HEIGHT;
 
+                if (this.buildStepCount === 0 && this.buildStartY === 0) {
+                    this.buildStartY = this.y;
+                }
+
                 // Calculate step position (ahead of lemming in direction it's facing)
                 const stepX = this.x + (this.direction * stepWidth / 2);
-                const stepY = this.y - this.buildStepHeight - stepHeight;
+                const stepY = this.buildStartY - ((this.buildStepCount + 1) * stepHeight);
 
                 // Check for ceiling (terrain within 20px above)
                 let hitCeiling = false;
@@ -229,7 +239,7 @@ export default class Lemming {
                     this.state = STATES.WALKING;
                     this.buildStepCount = 0;
                     this.buildFrameCounter = 0;
-                    this.buildStepHeight = 0;
+                    this.buildStartY = 0;
                     return;
                 }
 
@@ -248,10 +258,13 @@ export default class Lemming {
                 }
 
                 if (canBuild) {
-                    // Place the step
-                    terrain.addTerrainRect(stepX, stepY, stepWidth, stepHeight);
+                    // Place the step and fill down to starting surface for a solid ramp
+                    const fillHeight = Math.max(this.buildStartY - stepY, stepHeight);
+                    terrain.addTerrainRect(stepX, stepY, stepWidth, fillHeight, {
+                        color: BUILDER_STEP_COLOR,
+                        variation: BUILDER_STEP_COLOR_VARIATION
+                    });
                     this.buildStepCount++;
-                    this.buildStepHeight += stepHeight;
 
                     // Spawn build particles
                     if (particleSystem) {
@@ -266,7 +279,7 @@ export default class Lemming {
                     this.state = STATES.WALKING;
                     this.buildStepCount = 0;
                     this.buildFrameCounter = 0;
-                    this.buildStepHeight = 0;
+                    this.buildStartY = 0;
                 }
 
                 // Check if reached maximum steps
@@ -275,7 +288,7 @@ export default class Lemming {
                     this.state = STATES.WALKING;
                     this.buildStepCount = 0;
                     this.buildFrameCounter = 0;
-                    this.buildStepHeight = 0;
+                    this.buildStartY = 0;
                 }
             }
 
@@ -739,11 +752,6 @@ export default class Lemming {
         for (let step = 1; step <= MAX_STEP_CLIMB; step++) {
             const candidateY = originalY - step;
             if (!this.isSpaceClear(terrain, candidateY)) {
-                continue;
-            }
-
-            const forwardX = this.x + this.direction;
-            if (!this.isSpaceClearAt(terrain, forwardX, candidateY)) {
                 continue;
             }
 

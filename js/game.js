@@ -182,7 +182,7 @@ canvas.addEventListener('click', (e) => {
                     lemming.state = STATES.BUILDING;
                     lemming.buildStepCount = 0;
                     lemming.buildFrameCounter = 0;
-                    lemming.buildStepHeight = 0;
+                    lemming.buildStartY = lemming.y;
                     skills.builder--;
                     console.log(`Assigned builder to lemming. Remaining: ${skills.builder}`);
                 }

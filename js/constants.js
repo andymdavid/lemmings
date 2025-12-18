@@ -2,8 +2,8 @@
 export const WALK_SPEED = 0.5;
 export const GRAVITY = 0.4;
 export const TERMINAL_VELOCITY = 8;
-export const MAX_SAFE_FALL = 80;
-export const DIG_SPEED = 0.3; // pixels per frame downward while digging
+export const MAX_SAFE_FALL = 160;
+export const DIG_SPEED = 0.33; // pixels per frame downward while digging (~10% faster)
 
 // Game configuration
 export const MAX_LEMMINGS = 20;
@@ -40,5 +40,8 @@ export const COLORS = {
     LEMMING_BUILDER_OUTLINE: '#a16207',
     TERRAIN_BASE_R: 139,
     TERRAIN_BASE_G: 69,
-    TERRAIN_BASE_B: 19
+    TERRAIN_BASE_B: 19,
+    STEEL_RAMP_R: 160,
+    STEEL_RAMP_G: 170,
+    STEEL_RAMP_B: 180
 };

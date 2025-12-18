@@ -78,8 +78,13 @@ export default class TerrainManager {
         }
     }
 
-    addTerrainRect(x, y, width, height) {
+    addTerrainRect(x, y, width, height, colorOptions = null) {
         // Add terrain in a rectangular area at (x, y)
+        const useCustomColor = Boolean(colorOptions?.color);
+        const variation = colorOptions?.variation ?? 0;
+
+        const clampChannel = (value) => Math.max(0, Math.min(255, value));
+
         for (let dy = 0; dy < height; dy++) {
             for (let dx = 0; dx < width; dx++) {
                 const px = Math.floor(x + dx);
@@ -87,11 +92,21 @@ export default class TerrainManager {
                 if (px >= 0 && px < this.width && py >= 0 && py < this.height) {
                     this.grid[py][px] = true;
                     // Regenerate color for new terrain
-                    this.colorMap[py][px] = {
-                        r: COLORS.TERRAIN_BASE_R + Math.random() * 30 - 15,
-                        g: COLORS.TERRAIN_BASE_G + Math.random() * 20 - 10,
-                        b: COLORS.TERRAIN_BASE_B + Math.random() * 20 - 10
-                    };
+                    if (useCustomColor) {
+                        const base = colorOptions.color;
+                        const jitter = () => (Math.random() - 0.5) * variation * 2;
+                        this.colorMap[py][px] = {
+                            r: clampChannel(base.r + jitter()),
+                            g: clampChannel(base.g + jitter()),
+                            b: clampChannel(base.b + jitter())
+                        };
+                    } else {
+                        this.colorMap[py][px] = {
+                            r: COLORS.TERRAIN_BASE_R + Math.random() * 30 - 15,
+                            g: COLORS.TERRAIN_BASE_G + Math.random() * 20 - 10,
+                            b: COLORS.TERRAIN_BASE_B + Math.random() * 20 - 10
+                        };
+                    }
                 }
             }
         }
