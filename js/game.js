@@ -83,6 +83,11 @@ let lemmingsSpawned = 0;
 let lemmingsDead = 0;
 let lemmingsSaved = 0;
 
+// Game state and timer
+let gameState = 'playing'; // 'playing', 'won', 'lost'
+let gameTimer = 0; // Time elapsed in seconds
+let finalTime = 0; // Time when game ended
+
 // Skill inventory
 const skills = {
     blocker: 5,
@@ -133,6 +138,26 @@ canvas.addEventListener('mousemove', (e) => {
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
 
+    // Check if hovering over restart button when game is won
+    if (gameState === 'won') {
+        const boxWidth = 400;
+        const boxHeight = 300;
+        const boxX = (canvas.width - boxWidth) / 2;
+        const boxY = (canvas.height - boxHeight) / 2;
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonX = (canvas.width - buttonWidth) / 2;
+        const buttonY = boxY + boxHeight - 80;
+
+        if (mouseX >= buttonX && mouseX <= buttonX + buttonWidth &&
+            mouseY >= buttonY && mouseY <= buttonY + buttonHeight) {
+            canvas.style.cursor = 'pointer';
+            return;
+        }
+        canvas.style.cursor = 'default';
+        return;
+    }
+
     const hoveredSkill = getHoveredSkillButton(mouseX, mouseY);
     if (hoveredSkill) {
         canvas.style.cursor = 'pointer';
@@ -158,6 +183,25 @@ canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
+
+    // Check for restart button click if game is won
+    if (gameState === 'won') {
+        const boxWidth = 400;
+        const boxHeight = 300;
+        const boxX = (canvas.width - boxWidth) / 2;
+        const boxY = (canvas.height - boxHeight) / 2;
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonX = (canvas.width - buttonWidth) / 2;
+        const buttonY = boxY + boxHeight - 80;
+
+        if (clickX >= buttonX && clickX <= buttonX + buttonWidth &&
+            clickY >= buttonY && clickY <= buttonY + buttonHeight) {
+            // Restart the game
+            location.reload();
+            return;
+        }
+    }
 
     const clickedSkill = getHoveredSkillButton(clickX, clickY);
     if (clickedSkill) {
@@ -308,6 +352,22 @@ function update(dt) {
         frameCount = 0;
         fpsUpdateTime = 0;
     }
+
+    // Update game timer
+    if (gameState === 'playing') {
+        gameTimer += dt;
+    }
+
+    // Check win condition
+    if (gameState === 'playing' && lemmingsSpawned >= MAX_LEMMINGS && lemmings.length === 0) {
+        // All lemmings have been spawned and all are either saved or dead
+        const winPercentage = (lemmingsSaved / MAX_LEMMINGS) * 100;
+        if (winPercentage >= 80) {
+            gameState = 'won';
+            finalTime = gameTimer;
+            console.log(`Level Complete! ${lemmingsSaved}/${MAX_LEMMINGS} saved (${winPercentage.toFixed(1)}%) in ${finalTime.toFixed(1)}s`);
+        }
+    }
 }
 
 // Render game visuals
@@ -343,7 +403,7 @@ function render() {
     });
 
     // Draw UI
-    const gameState = {
+    const uiState = {
         lemmingsSpawned,
         lemmingsDead,
         lemmingsSaved,
@@ -352,7 +412,70 @@ function render() {
         fps,
         deltaTime
     };
-    uiManager.render(ctx, gameState);
+    uiManager.render(ctx, uiState);
+
+    // Draw victory overlay if won
+    if (gameState === 'won') {
+        // Semi-transparent dark background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Victory message box
+        const boxWidth = 400;
+        const boxHeight = 300;
+        const boxX = (canvas.width - boxWidth) / 2;
+        const boxY = (canvas.height - boxHeight) / 2;
+
+        // Box background with gold border
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.strokeStyle = '#fbbf24';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        // Level Complete title
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 36px "Fredoka", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Level Complete!', canvas.width / 2, boxY + 60);
+
+        // Success percentage
+        const winPercentage = (lemmingsSaved / MAX_LEMMINGS) * 100;
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 28px "Fredoka", sans-serif';
+        ctx.fillText(`${lemmingsSaved}/${MAX_LEMMINGS} Saved`, canvas.width / 2, boxY + 120);
+        ctx.font = '24px "Fredoka", sans-serif';
+        ctx.fillText(`(${winPercentage.toFixed(1)}%)`, canvas.width / 2, boxY + 155);
+
+        // Time taken
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = '20px "Fredoka", sans-serif';
+        const minutes = Math.floor(finalTime / 60);
+        const seconds = (finalTime % 60).toFixed(1);
+        const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        ctx.fillText(`Time: ${timeStr}`, canvas.width / 2, boxY + 195);
+
+        // Restart button
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonX = (canvas.width - buttonWidth) / 2;
+        const buttonY = boxY + boxHeight - 80;
+
+        ctx.fillStyle = '#8b5cf6';
+        ctx.strokeStyle = '#c4b5fd';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 20px "Fredoka", sans-serif';
+        ctx.fillText('Restart', canvas.width / 2, buttonY + buttonHeight / 2);
+    }
 
     // Restore canvas if screen shake was active
     if (shakeX !== 0 || shakeY !== 0) {
