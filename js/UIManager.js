@@ -38,7 +38,7 @@ export default class UIManager {
     }
 
     render(ctx, gameState) {
-        const { lemmingsSpawned, lemmingsDead, lemmingsSaved, skills, selectedSkill, fps, deltaTime } = gameState;
+        const { lemmingsSpawned, lemmingsDead, lemmingsSaved, skills, selectedSkill, fps, deltaTime, gameState: currentGameState } = gameState;
 
         // Draw UI - Lemming counter (now pinned to top-right)
         ctx.fillStyle = '#f1f5f9';
@@ -76,21 +76,36 @@ export default class UIManager {
         // Draw skills row at bottom
         ctx.font = '16px "Fredoka", sans-serif';
         ctx.textBaseline = 'middle';
+        const isGameLost = currentGameState === 'lost';
+
         layout.forEach(({ skill, rect }) => {
             const { x, y, width, height } = rect;
             const isSelected = selectedSkill === skill;
             const skillCount = skills[skill] ?? 0;
             const hasSkill = skillCount > 0;
 
-            ctx.fillStyle = isSelected ? 'rgba(139, 92, 246, 0.35)' : 'rgba(15, 23, 42, 0.75)';
-            ctx.strokeStyle = isSelected ? '#c4b5fd' : '#8b5cf6';
+            // Grey out buttons if game is lost
+            if (isGameLost) {
+                ctx.fillStyle = 'rgba(15, 23, 42, 0.5)';
+                ctx.strokeStyle = '#4b5563';
+            } else {
+                ctx.fillStyle = isSelected ? 'rgba(139, 92, 246, 0.35)' : 'rgba(15, 23, 42, 0.75)';
+                ctx.strokeStyle = isSelected ? '#c4b5fd' : '#8b5cf6';
+            }
+
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.roundRect(x, y, width, height, 8);
             ctx.fill();
             ctx.stroke();
 
-            ctx.fillStyle = hasSkill ? '#f8fafc' : '#6b7280';
+            // Grey out text if game is lost
+            if (isGameLost) {
+                ctx.fillStyle = '#4b5563';
+            } else {
+                ctx.fillStyle = hasSkill ? '#f8fafc' : '#6b7280';
+            }
+
             ctx.textAlign = 'center';
             const label = `${skill.charAt(0).toUpperCase() + skill.slice(1)}: ${skillCount}`;
             ctx.fillText(label, x + width / 2, y + height / 2);

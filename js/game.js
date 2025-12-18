@@ -138,8 +138,8 @@ canvas.addEventListener('mousemove', (e) => {
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
 
-    // Check if hovering over restart button when game is won
-    if (gameState === 'won') {
+    // Check if hovering over restart button when game is won or lost
+    if (gameState === 'won' || gameState === 'lost') {
         const boxWidth = 400;
         const boxHeight = 300;
         const boxX = (canvas.width - boxWidth) / 2;
@@ -184,8 +184,8 @@ canvas.addEventListener('click', (e) => {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // Check for restart button click if game is won
-    if (gameState === 'won') {
+    // Check for restart button click if game is won or lost
+    if (gameState === 'won' || gameState === 'lost') {
         const boxWidth = 400;
         const boxHeight = 300;
         const boxX = (canvas.width - boxWidth) / 2;
@@ -201,6 +201,11 @@ canvas.addEventListener('click', (e) => {
             location.reload();
             return;
         }
+    }
+
+    // Don't allow skill selection or lemming clicks if game is over
+    if (gameState !== 'playing') {
+        return;
     }
 
     const clickedSkill = getHoveredSkillButton(clickX, clickY);
@@ -265,6 +270,9 @@ document.addEventListener('keydown', (e) => {
     const pressedKey = e.key;
     const skill = skillHotkeyMap[pressedKey];
     if (!skill) return;
+
+    // Don't allow skill selection if game is over
+    if (gameState !== 'playing') return;
 
     selectedSkill = skill;
     console.log(`Selected skill via hotkey: ${skill.charAt(0).toUpperCase() + skill.slice(1)}`);
@@ -358,6 +366,21 @@ function update(dt) {
         gameTimer += dt;
     }
 
+    // Check lose condition (continuously)
+    if (gameState === 'playing') {
+        const activeLemmings = lemmings.filter(l => l.state !== STATES.DEAD).length;
+        const unspawnedLemmings = MAX_LEMMINGS - lemmingsSpawned;
+        const maxPossibleSaves = lemmingsSaved + activeLemmings + unspawnedLemmings;
+        const targetSaves = Math.ceil(MAX_LEMMINGS * 0.8); // 16 for 20 lemmings
+
+        if (maxPossibleSaves < targetSaves) {
+            // Impossible to win - not enough lemmings can be saved
+            gameState = 'lost';
+            finalTime = gameTimer;
+            console.log(`Level Failed! Only ${maxPossibleSaves} can be saved (need ${targetSaves})`);
+        }
+    }
+
     // Check win condition
     if (gameState === 'playing' && lemmingsSpawned >= MAX_LEMMINGS && lemmings.length === 0) {
         // All lemmings have been spawned and all are either saved or dead
@@ -366,6 +389,11 @@ function update(dt) {
             gameState = 'won';
             finalTime = gameTimer;
             console.log(`Level Complete! ${lemmingsSaved}/${MAX_LEMMINGS} saved (${winPercentage.toFixed(1)}%) in ${finalTime.toFixed(1)}s`);
+        } else {
+            // All lemmings processed but didn't meet win condition
+            gameState = 'lost';
+            finalTime = gameTimer;
+            console.log(`Level Failed! ${lemmingsSaved}/${MAX_LEMMINGS} saved (${winPercentage.toFixed(1)}%)`);
         }
     }
 }
@@ -410,7 +438,8 @@ function render() {
         skills,
         selectedSkill,
         fps,
-        deltaTime
+        deltaTime,
+        gameState
     };
     uiManager.render(ctx, uiState);
 
@@ -449,6 +478,69 @@ function render() {
         ctx.fillText(`${lemmingsSaved}/${MAX_LEMMINGS} Saved`, canvas.width / 2, boxY + 120);
         ctx.font = '24px "Fredoka", sans-serif';
         ctx.fillText(`(${winPercentage.toFixed(1)}%)`, canvas.width / 2, boxY + 155);
+
+        // Time taken
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = '20px "Fredoka", sans-serif';
+        const minutes = Math.floor(finalTime / 60);
+        const seconds = (finalTime % 60).toFixed(1);
+        const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+        ctx.fillText(`Time: ${timeStr}`, canvas.width / 2, boxY + 195);
+
+        // Restart button
+        const buttonWidth = 200;
+        const buttonHeight = 50;
+        const buttonX = (canvas.width - buttonWidth) / 2;
+        const buttonY = boxY + boxHeight - 80;
+
+        ctx.fillStyle = '#8b5cf6';
+        ctx.strokeStyle = '#c4b5fd';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 20px "Fredoka", sans-serif';
+        ctx.fillText('Restart', canvas.width / 2, buttonY + buttonHeight / 2);
+    }
+
+    // Draw failure overlay if lost
+    if (gameState === 'lost') {
+        // Semi-transparent dark background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Failure message box
+        const boxWidth = 400;
+        const boxHeight = 300;
+        const boxX = (canvas.width - boxWidth) / 2;
+        const boxY = (canvas.height - boxHeight) / 2;
+
+        // Box background with red/orange border
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        // Level Failed title
+        ctx.fillStyle = '#ef4444';
+        ctx.font = 'bold 36px "Fredoka", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Level Failed!', canvas.width / 2, boxY + 60);
+
+        // Failure percentage
+        const failPercentage = (lemmingsSaved / MAX_LEMMINGS) * 100;
+        ctx.fillStyle = '#fb923c';
+        ctx.font = 'bold 28px "Fredoka", sans-serif';
+        ctx.fillText(`${lemmingsSaved}/${MAX_LEMMINGS} Saved`, canvas.width / 2, boxY + 120);
+        ctx.font = '24px "Fredoka", sans-serif';
+        ctx.fillText(`(${failPercentage.toFixed(1)}%)`, canvas.width / 2, boxY + 155);
 
         // Time taken
         ctx.fillStyle = '#f1f5f9';
