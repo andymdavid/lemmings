@@ -1,11 +1,28 @@
-// Entrance portal with particle effects
+const PORTAL_THEMES = {
+    entrance: {
+        swirl: { r: 139, g: 92, b: 246 },
+        frameStroke: '#8b5cf6',
+        frameFill: '#1e1b4b',
+        gradient: { r: 139, g: 92, b: 246 }
+    },
+    exit: {
+        swirl: { r: 34, g: 197, b: 94 },
+        frameStroke: '#16a34a',
+        frameFill: '#022c22',
+        gradient: { r: 34, g: 197, b: 94 }
+    }
+};
+
+// Portal/particle system with configurable colors
 export default class ParticleSystem {
-    constructor(x, y) {
+    constructor(x, y, options = {}) {
         this.x = x;
         this.y = y;
-        this.width = 40;
-        this.height = 50;
+        this.width = options.width || 40;
+        this.height = options.height || 50;
         this.animationFrame = 0;
+        const themeKey = options.theme || 'entrance';
+        this.portalColors = PORTAL_THEMES[themeKey] || PORTAL_THEMES.entrance;
 
         // Particle system for portal effect
         this.particles = [];
@@ -245,22 +262,23 @@ export default class ParticleSystem {
         ctx.save();
 
         // Draw portal particles (swirling effect)
+        const swirlColor = this.portalColors.swirl;
         this.particles.forEach(particle => {
             const angle = particle.angle + this.animationFrame * particle.speed;
             const x = this.x + Math.cos(angle) * particle.distance;
             const y = this.y + Math.sin(angle) * particle.distance * 0.5;
 
             const alpha = 0.3 + Math.sin(this.animationFrame * 0.05 + particle.offset) * 0.3;
-            ctx.fillStyle = `rgba(139, 92, 246, ${alpha})`;
+            ctx.fillStyle = `rgba(${swirlColor.r}, ${swirlColor.g}, ${swirlColor.b}, ${alpha})`;
             ctx.beginPath();
             ctx.arc(x, y, particle.size, 0, Math.PI * 2);
             ctx.fill();
         });
 
         // Draw doorway structure
-        ctx.strokeStyle = '#8b5cf6';
+        ctx.strokeStyle = this.portalColors.frameStroke;
         ctx.lineWidth = 3;
-        ctx.fillStyle = '#1e1b4b';
+        ctx.fillStyle = this.portalColors.frameFill;
 
         // Door frame
         ctx.fillRect(
@@ -288,12 +306,13 @@ export default class ParticleSystem {
         ctx.stroke();
 
         // Glowing center portal
+        const gradientColors = this.portalColors.gradient;
         const gradient = ctx.createRadialGradient(
             this.x, this.y - this.height / 2, 0,
             this.x, this.y - this.height / 2, 15
         );
-        gradient.addColorStop(0, 'rgba(139, 92, 246, 0.6)');
-        gradient.addColorStop(1, 'rgba(139, 92, 246, 0)');
+        gradient.addColorStop(0, `rgba(${gradientColors.r}, ${gradientColors.g}, ${gradientColors.b}, 0.6)`);
+        gradient.addColorStop(1, `rgba(${gradientColors.r}, ${gradientColors.g}, ${gradientColors.b}, 0)`);
         ctx.fillStyle = gradient;
         ctx.fillRect(
             this.x - 15,

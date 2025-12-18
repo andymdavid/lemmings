@@ -102,8 +102,7 @@ export const LEVEL_1 = {
             description: "Final path leading to the exit",
             terrain: [
                 { x: 930, y: 400, width: 130, height: 25 },
-                { x: 960, y: 520, width: 140, height: 25 },
-                { x: 1030, y: 600, width: 150, height: 50 }
+                { x: 960, y: 520, width: 140, height: 25 }
             ]
         }
     ],

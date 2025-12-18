@@ -48,8 +48,24 @@ let fpsUpdateTime = 0;
 const terrain = new TerrainManager(canvas.width, canvas.height);
 terrain.initializeFromLevel(LEVEL_1);
 
-// Entrance
-const entrance = new ParticleSystem(LEVEL_1.entrance.x, LEVEL_1.entrance.y);
+// Exit configuration
+const exitConfig = LEVEL_1.exit;
+const floorY = exitConfig.position.y + exitConfig.dimensions.height;
+
+const SHOW_EXIT_PORTAL = false;
+
+// Entrance and exit portals
+const entrance = new ParticleSystem(LEVEL_1.entrance.x, LEVEL_1.entrance.y, { theme: 'entrance' });
+let exitPortal = null;
+if (SHOW_EXIT_PORTAL) {
+    const exitCenterX = exitConfig.position.x + exitConfig.dimensions.width / 2;
+    const exitBottomY = floorY;
+    exitPortal = new ParticleSystem(exitCenterX, exitBottomY, {
+        theme: 'exit',
+        width: exitConfig.dimensions.width,
+        height: exitConfig.dimensions.height
+    });
+}
 
 // UI Manager
 const uiManager = new UIManager(canvas);
@@ -211,8 +227,11 @@ document.addEventListener('keydown', (e) => {
 
 // Update game state
 function update(dt) {
-    // Update entrance
+    // Update entrance/exit visuals
     entrance.update(dt);
+    if (exitPortal) {
+        exitPortal.update(dt);
+    }
 
     // Spawn lemmings
     if (lemmingsSpawned < MAX_LEMMINGS) {
@@ -284,8 +303,11 @@ function render() {
     // Draw terrain
     terrain.render(ctx);
 
-    // Draw entrance
+    // Draw entrance/exit
     entrance.render(ctx);
+    if (exitPortal) {
+        exitPortal.render(ctx);
+    }
 
     // Draw all lemmings
     lemmings.forEach(lemming => {
