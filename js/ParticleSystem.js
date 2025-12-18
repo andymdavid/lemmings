@@ -27,6 +27,9 @@ export default class ParticleSystem {
 
         // Explosion particles array
         this.explosionParticles = [];
+
+        // Exit particles array
+        this.exitParticles = [];
     }
 
     spawnDigParticles(x, y, count) {
@@ -124,6 +127,30 @@ export default class ParticleSystem {
         }
     }
 
+    spawnExitParticles(x, y) {
+        // Spawn celebratory green sparkles when a lemming is saved
+        const count = Math.floor(Math.random() * 5) + 10; // 10-14 particles
+        for (let i = 0; i < count; i++) {
+            const angle = (Math.random() * Math.PI) - Math.PI / 2; // Mostly upward spread
+            const speed = Math.random() * 1.5 + 0.8;
+
+            this.exitParticles.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed * 0.6,
+                vy: Math.sin(angle) * speed - 0.5,
+                size: Math.random() * 2 + 1,
+                life: 30,
+                maxLife: 30,
+                color: {
+                    r: 34 + Math.random() * 20,
+                    g: 197 + Math.random() * 40,
+                    b: 94 + Math.random() * 20
+                }
+            });
+        }
+    }
+
     update(dt) {
         this.animationFrame++;
 
@@ -191,6 +218,25 @@ export default class ParticleSystem {
             // Remove dead particles
             if (particle.life <= 0) {
                 this.explosionParticles.splice(i, 1);
+            }
+        }
+
+        // Update exit particles
+        for (let i = this.exitParticles.length - 1; i >= 0; i--) {
+            const particle = this.exitParticles[i];
+
+            // Gentle float upward with slight drift
+            particle.vy -= 0.02;
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+
+            // Fade and shrink over time
+            particle.size *= 0.98;
+            if (particle.size < 0.5) particle.size = 0.5;
+
+            particle.life--;
+            if (particle.life <= 0) {
+                this.exitParticles.splice(i, 1);
             }
         }
     }
@@ -290,6 +336,18 @@ export default class ParticleSystem {
             ctx.fill();
 
             // Reset shadow
+            ctx.shadowBlur = 0;
+        });
+
+        // Draw exit particles
+        this.exitParticles.forEach(particle => {
+            const alpha = particle.life / particle.maxLife;
+            ctx.shadowBlur = 15 * alpha;
+            ctx.shadowColor = `rgba(${particle.color.r}, ${particle.color.g}, ${particle.color.b}, ${alpha})`;
+            ctx.fillStyle = `rgba(${particle.color.r}, ${particle.color.g}, ${particle.color.b}, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            ctx.fill();
             ctx.shadowBlur = 0;
         });
     }

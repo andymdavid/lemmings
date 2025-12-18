@@ -1,13 +1,39 @@
 import Lemming from './Lemming.js';
 import TerrainManager from './TerrainManager.js';
 import ParticleSystem from './ParticleSystem.js';
-import UIManager from './UIManager.js';
+import UIManager, { getSkillButtonBounds, SKILL_BUTTON_ORDER } from './UIManager.js';
+import LevelValidator from './LevelValidator.js';
 import LEVEL_1 from './levels.js';
 import { MAX_LEMMINGS, SPAWN_INTERVAL, STATES } from './constants.js';
 
 // Initialize canvas and context
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// Validate level before starting
+const validator = new LevelValidator(canvas.width, canvas.height);
+const validation = validator.validate(LEVEL_1);
+
+console.log('=== LEVEL VALIDATION ===');
+console.log(`Level: ${LEVEL_1.metadata?.name || 'Unnamed'}`);
+console.log(`Valid: ${validation.valid}`);
+
+if (validation.errors.length > 0) {
+    console.error('ERRORS:');
+    validation.errors.forEach(error => console.error(`  - ${error}`));
+}
+
+if (validation.warnings.length > 0) {
+    console.warn('WARNINGS:');
+    validation.warnings.forEach(warning => console.warn(`  - ${warning}`));
+}
+
+if (LEVEL_1.metadata?.requiredSkills) {
+    console.log('Required Skills:', LEVEL_1.metadata.requiredSkills);
+}
+
+console.log(`Sections: ${LEVEL_1.sections?.length || 0}`);
+console.log('========================');
 
 // Game state
 let lastTime = 0;
@@ -27,6 +53,11 @@ const entrance = new ParticleSystem(LEVEL_1.entrance.x, LEVEL_1.entrance.y);
 
 // UI Manager
 const uiManager = new UIManager(canvas);
+const skillButtonBounds = getSkillButtonBounds(canvas.width, canvas.height);
+const skillHotkeyMap = {};
+SKILL_BUTTON_ORDER.forEach((skill, index) => {
+    skillHotkeyMap[(index + 1).toString()] = skill;
+});
 
 // Lemmings array
 const lemmings = [];
@@ -64,29 +95,28 @@ function isPointInLemming(x, y, lemming) {
     return dx * dx + dy * dy < radius * radius;
 }
 
+function isPointInBounds(x, y, bounds) {
+    return x >= bounds.x && x <= bounds.x + bounds.width &&
+        y >= bounds.y && y <= bounds.y + bounds.height;
+}
+
+function getHoveredSkillButton(x, y) {
+    for (const [skill, bounds] of Object.entries(skillButtonBounds)) {
+        if (isPointInBounds(x, y, bounds)) {
+            return skill;
+        }
+    }
+    return null;
+}
+
 // Mouse move handler
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
     mouseX = e.clientX - rect.left;
     mouseY = e.clientY - rect.top;
 
-    // Check if hovering over skill buttons
-    const blockerButtonBounds = { x: 15, y: 115, width: 150, height: 35 };
-    const diggerButtonBounds = { x: 15, y: 155, width: 150, height: 35 };
-    const builderButtonBounds = { x: 15, y: 195, width: 150, height: 35 };
-    const bomberButtonBounds = { x: 15, y: 235, width: 150, height: 35 };
-
-    const overButton =
-        (mouseX >= blockerButtonBounds.x && mouseX <= blockerButtonBounds.x + blockerButtonBounds.width &&
-         mouseY >= blockerButtonBounds.y && mouseY <= blockerButtonBounds.y + blockerButtonBounds.height) ||
-        (mouseX >= diggerButtonBounds.x && mouseX <= diggerButtonBounds.x + diggerButtonBounds.width &&
-         mouseY >= diggerButtonBounds.y && mouseY <= diggerButtonBounds.y + diggerButtonBounds.height) ||
-        (mouseX >= builderButtonBounds.x && mouseX <= builderButtonBounds.x + builderButtonBounds.width &&
-         mouseY >= builderButtonBounds.y && mouseY <= builderButtonBounds.y + builderButtonBounds.height) ||
-        (mouseX >= bomberButtonBounds.x && mouseX <= bomberButtonBounds.x + bomberButtonBounds.width &&
-         mouseY >= bomberButtonBounds.y && mouseY <= bomberButtonBounds.y + bomberButtonBounds.height);
-
-    if (overButton) {
+    const hoveredSkill = getHoveredSkillButton(mouseX, mouseY);
+    if (hoveredSkill) {
         canvas.style.cursor = 'pointer';
         hoveredLemming = null;
         return;
@@ -111,37 +141,10 @@ canvas.addEventListener('click', (e) => {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // Check if skill buttons were clicked
-    const blockerButtonBounds = { x: 15, y: 115, width: 150, height: 35 };
-    const diggerButtonBounds = { x: 15, y: 155, width: 150, height: 35 };
-    const builderButtonBounds = { x: 15, y: 195, width: 150, height: 35 };
-    const bomberButtonBounds = { x: 15, y: 235, width: 150, height: 35 };
-
-    if (clickX >= blockerButtonBounds.x && clickX <= blockerButtonBounds.x + blockerButtonBounds.width &&
-        clickY >= blockerButtonBounds.y && clickY <= blockerButtonBounds.y + blockerButtonBounds.height) {
-        selectedSkill = 'blocker';
-        console.log('Selected skill: Blocker');
-        return;
-    }
-
-    if (clickX >= diggerButtonBounds.x && clickX <= diggerButtonBounds.x + diggerButtonBounds.width &&
-        clickY >= diggerButtonBounds.y && clickY <= diggerButtonBounds.y + diggerButtonBounds.height) {
-        selectedSkill = 'digger';
-        console.log('Selected skill: Digger');
-        return;
-    }
-
-    if (clickX >= builderButtonBounds.x && clickX <= builderButtonBounds.x + builderButtonBounds.width &&
-        clickY >= builderButtonBounds.y && clickY <= builderButtonBounds.y + builderButtonBounds.height) {
-        selectedSkill = 'builder';
-        console.log('Selected skill: Builder');
-        return;
-    }
-
-    if (clickX >= bomberButtonBounds.x && clickX <= bomberButtonBounds.x + bomberButtonBounds.width &&
-        clickY >= bomberButtonBounds.y && clickY <= bomberButtonBounds.y + bomberButtonBounds.height) {
-        selectedSkill = 'bomber';
-        console.log('Selected skill: Bomber');
+    const clickedSkill = getHoveredSkillButton(clickX, clickY);
+    if (clickedSkill) {
+        selectedSkill = clickedSkill;
+        console.log(`Selected skill: ${clickedSkill.charAt(0).toUpperCase() + clickedSkill.slice(1)}`);
         return;
     }
 
@@ -194,6 +197,16 @@ canvas.addEventListener('click', (e) => {
             break;
         }
     }
+});
+
+document.addEventListener('keydown', (e) => {
+    const pressedKey = e.key;
+    const skill = skillHotkeyMap[pressedKey];
+    if (!skill) return;
+
+    selectedSkill = skill;
+    console.log(`Selected skill via hotkey: ${skill.charAt(0).toUpperCase() + skill.slice(1)}`);
+    e.preventDefault();
 });
 
 // Update game state

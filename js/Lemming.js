@@ -12,6 +12,10 @@ import {
     COLORS
 } from './constants.js';
 
+const MAX_STEP_CLIMB = 4; // Pixels a walking lemming can climb when hitting a wall
+const BUILDER_STEP_WIDTH = 10;
+const BUILDER_STEP_HEIGHT = 2;
+
 export default class Lemming {
     constructor(x, y) {
         // Position
@@ -127,18 +131,8 @@ export default class Lemming {
             this.state === STATES.FALLING) {
             this.vx = WALK_SPEED * this.direction;
 
-            // Check for wall ahead
             const checkX = this.x + (this.direction * (this.width / 2 + 2));
-            const checkY = this.y - this.height / 2;
-
-            // Wall detection - check multiple points vertically
-            let hitWall = false;
-            for (let i = 0; i < 3; i++) {
-                if (terrain && terrain.isSolid(checkX, checkY + i * 5)) {
-                    hitWall = true;
-                    break;
-                }
-            }
+            const hitWall = this.hasWallAhead(terrain);
 
             // Check for blocker collision
             let hitBlocker = false;
@@ -155,8 +149,14 @@ export default class Lemming {
             }
 
             if ((hitWall || hitBlocker) && this.state === STATES.WALKING) {
-                // Reverse direction when hitting a wall or blocker
-                this.direction *= -1;
+                if (hitBlocker) {
+                    this.direction *= -1;
+                } else if (hitWall && terrain && this.tryStepUp(terrain)) {
+                    this.x += this.vx;
+                } else {
+                    // Reverse direction when hitting a wall or blocker
+                    this.direction *= -1;
+                }
             } else {
                 // Move horizontally
                 this.x += this.vx;
@@ -204,9 +204,9 @@ export default class Lemming {
             if (this.buildFrameCounter >= 8) {
                 this.buildFrameCounter = 0;
 
-                // Each step is 6px wide and 4px tall
-                const stepWidth = 6;
-                const stepHeight = 4;
+                // Each step is wider and shallower for smoother ramps
+                const stepWidth = BUILDER_STEP_WIDTH;
+                const stepHeight = BUILDER_STEP_HEIGHT;
 
                 // Calculate step position (ahead of lemming in direction it's facing)
                 const stepX = this.x + (this.direction * stepWidth / 2);
@@ -289,13 +289,33 @@ export default class Lemming {
 
         // Ground collision detection
         if (terrain) {
-            const feetY = this.y;
-            const groundBelow = terrain.isSolid(this.x, feetY);
+            // Check for ground within a small range below the lemming's feet (not just at exact position)
+            // This allows lemmings to detect and land on builder steps
+            let groundBelow = false;
+            let groundDistance = 0;
+            const maxGroundCheckDistance = 3; // Check up to 3 pixels below
+
+            for (let checkDist = 0; checkDist <= maxGroundCheckDistance; checkDist++) {
+                if (terrain.isSolid(this.x, this.y + checkDist)) {
+                    groundBelow = true;
+                    groundDistance = checkDist;
+                    break;
+                }
+            }
 
             if (groundBelow) {
-                // Move lemming up until feet are on surface
-                while (terrain.isSolid(this.x, this.y) && this.y > 0) {
-                    this.y -= 1;
+                // If ground is below us, move down close to it (or push up if inside it)
+                if (groundDistance > 0) {
+                    // Keep a 1px buffer above terrain so we don't snap into it
+                    const snapDistance = Math.max(groundDistance - 1, 0);
+                    if (snapDistance > 0) {
+                        this.y += snapDistance;
+                    }
+                } else {
+                    // We're inside terrain - push up until on surface
+                    while (terrain.isSolid(this.x, this.y) && this.y > 0) {
+                        this.y -= 1;
+                    }
                 }
 
                 this.vy = 0;
@@ -667,5 +687,71 @@ export default class Lemming {
 
             ctx.restore();
         }
+    }
+
+    hasWallAhead(terrain) {
+        if (!terrain) return false;
+
+        const checkX = this.x + (this.direction * (this.width / 2 + 2));
+        const checkY = this.y - this.height / 2;
+
+        for (let i = 0; i < 3; i++) {
+            if (terrain.isSolid(checkX, checkY + i * 5)) {
+                return true;
+            }
+        }
+
+        // Additional samples near the feet so shallow steps (e.g., builder ramps) count as obstacles
+        for (let offset = 1; offset <= MAX_STEP_CLIMB; offset++) {
+            if (terrain.isSolid(checkX, this.y - offset)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    isSpaceClear(terrain, candidateFeetY) {
+        return this.isSpaceClearAt(terrain, this.x, candidateFeetY);
+    }
+
+    isSpaceClearAt(terrain, centerX, candidateFeetY) {
+        if (!terrain) return true;
+
+        const halfWidth = this.width / 2 - 1;
+        const sampleXs = [centerX - halfWidth, centerX, centerX + halfWidth];
+        const topY = candidateFeetY - this.height + 1;
+
+        for (const sampleX of sampleXs) {
+            for (let sampleY = topY; sampleY <= candidateFeetY; sampleY += 2) {
+                if (terrain.isSolid(sampleX, sampleY)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    tryStepUp(terrain) {
+        const originalY = this.y;
+
+        for (let step = 1; step <= MAX_STEP_CLIMB; step++) {
+            const candidateY = originalY - step;
+            if (!this.isSpaceClear(terrain, candidateY)) {
+                continue;
+            }
+
+            const forwardX = this.x + this.direction;
+            if (!this.isSpaceClearAt(terrain, forwardX, candidateY)) {
+                continue;
+            }
+
+            this.y = candidateY;
+            return true;
+        }
+
+        this.y = originalY;
+        return false;
     }
 }

@@ -1,4 +1,5 @@
 import { COLORS } from './constants.js';
+import LevelValidator from './LevelValidator.js';
 
 export default class TerrainManager {
     constructor(width, height) {
@@ -19,8 +20,11 @@ export default class TerrainManager {
     }
 
     initializeFromLevel(levelData) {
-        // Draw all terrain rectangles from level data
-        levelData.terrain.forEach(rect => {
+        // Get flattened terrain array from new level format
+        const terrain = LevelValidator.flattenTerrain(levelData);
+
+        // Draw all terrain rectangles
+        terrain.forEach(rect => {
             this.drawRect(rect.x, rect.y, rect.width, rect.height, true);
         });
     }
