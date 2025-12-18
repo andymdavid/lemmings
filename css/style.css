@@ -1,0 +1,47 @@
+:root {
+    --primary-color: #8b5cf6;
+    --secondary-color: #6366f1;
+    --accent-color: #ec4899;
+    --bg-dark: #1e1b4b;
+    --bg-darker: #0f172a;
+    --text-light: #f1f5f9;
+    --shadow-color: rgba(0, 0, 0, 0.5);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Fredoka', sans-serif;
+    background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-darker) 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--text-light);
+    overflow: hidden;
+}
+
+.game-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+canvas {
+    background: #2d3748;
+    border: 3px solid var(--primary-color);
+    border-radius: 8px;
+    box-shadow:
+        0 10px 40px var(--shadow-color),
+        0 0 20px rgba(139, 92, 246, 0.3);
+    cursor: crosshair;
+}
+
+.mono {
+    font-family: 'Space Mono', monospace;
+}
