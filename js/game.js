@@ -429,23 +429,30 @@ function update(dt) {
 
     // Check exit collision for lemmings
     if (exitPortal) {
+        // Use the actual portal position (where it's drawn) for collision, not the level config
+        const exitCenterX = exitConfig.position.x + exitConfig.dimensions.width / 2;
+        const floorY = currentLevel.ground ? currentLevel.ground.y : 640;
+
         const exitBounds = {
-            x: exitConfig.position.x,
-            y: exitConfig.position.y,
+            x: exitCenterX - exitConfig.dimensions.width / 2,
+            y: floorY - exitConfig.dimensions.height,
             width: exitConfig.dimensions.width,
             height: exitConfig.dimensions.height
         };
 
         for (let i = lemmings.length - 1; i >= 0; i--) {
             const lemming = lemmings[i];
-            // Only lemmings that are alive can exit
-            if (lemming.state !== STATES.DEAD && lemming.state !== STATES.SAVED) {
+            // Only walking or falling lemmings can exit (alive states)
+            if ((lemming.state === STATES.WALKING || lemming.state === STATES.FALLING) &&
+                lemming.state !== STATES.SAVED) {
                 // Check if lemming's center point is inside exit bounds
                 if (isPointInBounds(lemming.x, lemming.y, exitBounds)) {
                     lemming.state = STATES.SAVED;
-                    // Spawn exit particles
+                    // Spawn exit particles with flash effect
                     exitPortal.spawnExitParticles(lemming.x, lemming.y);
+                    // Remove from active array
                     lemmings.splice(i, 1);
+                    // Increment saved counter
                     lemmingsSaved++;
                 }
             }
