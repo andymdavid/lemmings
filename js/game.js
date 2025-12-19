@@ -319,6 +319,8 @@ canvas.addEventListener('click', (e) => {
                         lemming.state = STATES.DIGGING;
                         lemming.vx = 0;
                         lemming.vy = 0;
+                        lemming.digStartY = 0; // Reset dig tracking
+                        lemming.digDepth = 0;
                         skills.digger--;
                         console.log(`Assigned digger to lemming. Remaining: ${skills.digger}`);
                     }

@@ -60,6 +60,10 @@ export default class Lemming {
         this.buildFrameCounter = 0; // Frames since last step placed
         this.buildStartY = 0; // Y position where building started
 
+        // Digging state
+        this.digStartY = 0; // Y position where digging started
+        this.digDepth = 0; // How far down the digger has dug
+
         // Bomber state
         this.bomberCountdown = -1; // -1 = not a bomber, 0-300 = countdown frames
         this.justExploded = false; // Flag to trigger screen shake
@@ -216,12 +220,20 @@ export default class Lemming {
 
         // Handle digging behavior
         if (this.state === STATES.DIGGING && terrain) {
+            // Track dig start position
+            if (this.digStartY === 0) {
+                this.digStartY = this.y;
+            }
+
+            // Calculate current dig depth
+            this.digDepth = this.y - this.digStartY;
+
             // Move downward slowly
             this.y += DIG_SPEED;
 
             // Remove terrain below with rougher, wider pattern
-            // Main dig area - wider tunnel (8px wide, 3px deep)
-            terrain.removeTerrainRect(this.x, this.y, 8, 3);
+            // Main dig area - wider tunnel (12px wide, 3px deep) to fit lemming width (10px)
+            terrain.removeTerrainRect(this.x, this.y, 12, 3);
 
             // Add roughness by removing random additional pixels around the edges
             for (let i = 0; i < 3; i++) {
@@ -239,11 +251,19 @@ export default class Lemming {
             // Check if there's still terrain below to dig
             const checkBelow = terrain.isSolid(this.x, this.y + 4);
             const reachedBottom = this.y >= terrain.height - 10;
+            const reachedMaxDepth = this.digDepth >= 60; // Maximum dig depth of 60px
 
-            if (!checkBelow || reachedBottom) {
+            // Only stop if we've broken through OR hit bottom OR exceeded max depth AND broken through
+            if (!checkBelow || reachedBottom || (reachedMaxDepth && !checkBelow)) {
+                // Clean up area around lemming before transitioning to ensure it can fall freely
+                // Remove a wider area (16px wide, 8px tall) around the lemming
+                terrain.removeTerrainRect(this.x, this.y - 4, 16, 8);
+
                 // Finished digging - transition to falling
                 this.state = STATES.FALLING;
                 this.fallStartY = this.y;
+                this.digStartY = 0;
+                this.digDepth = 0;
             }
         }
 
@@ -289,22 +309,30 @@ export default class Lemming {
                 }
 
                 // Check if there's space to build (not hitting wall or existing terrain)
+                // Must check the ENTIRE fill height, not just the step height
+                const fillHeight = Math.max(this.buildStartY - stepY, stepHeight);
                 let canBuild = true;
+                let obstacleAt = stepWidth; // Position where obstacle starts (default to full width)
+
+                // Check each horizontal position
                 for (let dx = 0; dx < stepWidth; dx++) {
-                    for (let dy = 0; dy < stepHeight; dy++) {
+                    let hitObstacle = false;
+                    // Check the full vertical fill at this horizontal position
+                    for (let dy = 0; dy < fillHeight; dy++) {
                         const checkX = stepX + dx;
                         const checkY = stepY + dy;
                         if (terrain.isSolid(checkX, checkY)) {
+                            hitObstacle = true;
                             canBuild = false;
+                            obstacleAt = dx; // Record where the obstacle starts
                             break;
                         }
                     }
-                    if (!canBuild) break;
+                    if (hitObstacle) break;
                 }
 
                 if (canBuild) {
-                    // Place the step and fill down to starting surface for a solid ramp
-                    const fillHeight = Math.max(this.buildStartY - stepY, stepHeight);
+                    // Full step can be placed - no obstacle
                     terrain.addTerrainRect(stepX, stepY, stepWidth, fillHeight, {
                         color: BUILDER_STEP_COLOR,
                         variation: BUILDER_STEP_COLOR_VARIATION
@@ -320,7 +348,16 @@ export default class Lemming {
                     this.x += this.direction * stepWidth;
                     this.y -= stepHeight;
                 } else {
-                    // Can't build anymore (hit obstacle) - return to walking
+                    // Hit obstacle - fill the gap up to the obstacle to make it flush
+                    if (obstacleAt > 0) {
+                        // Place a partial step from stepX to where the obstacle starts
+                        terrain.addTerrainRect(stepX, stepY, obstacleAt, fillHeight, {
+                            color: BUILDER_STEP_COLOR,
+                            variation: BUILDER_STEP_COLOR_VARIATION
+                        });
+                    }
+
+                    // Stop building - hit an obstacle
                     this.state = STATES.WALKING;
                     this.buildStepCount = 0;
                     this.buildFrameCounter = 0;
@@ -328,7 +365,7 @@ export default class Lemming {
                 }
 
                 // Check if reached maximum steps
-                if (this.buildStepCount >= 12) {
+                if (this.buildStepCount >= 15) {
                     // Finished building - return to walking
                     this.state = STATES.WALKING;
                     this.buildStepCount = 0;

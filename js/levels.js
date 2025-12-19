@@ -39,7 +39,7 @@ const LEVEL_1 = {
                 { x: 260, y: 420, width: 500, height: 40, label: 'E' },
                 { x: 260, y: 500, width: 100, height: 40, label: 'K' },
                 { x: 260, y: 560, width: 500, height: 40, label: 'F' },
-                { x: 880, y: 500, width: 50, height: 200, label: 'L' },
+                { x: 880, y: 540, width: 50, height: 100, label: 'L' },
                 { x: 185, y: 430, width: 75, height: 40, label: 'G' },
                 { x: 110, y: 440, width: 75, height: 40, label: 'H' }
             ]
