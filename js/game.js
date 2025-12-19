@@ -1,12 +1,12 @@
 import Lemming from './Lemming.js';
 import TerrainManager from './TerrainManager.js';
 import ParticleSystem from './ParticleSystem.js';
-import UIManager, { getSkillButtonBounds, getDebugLevelMenuLayout, SKILL_BUTTON_ORDER } from './UIManager.js';
+import UIManager, { getSkillButtonBounds, SKILL_BUTTON_ORDER } from './UIManager.js';
 import LevelValidator from './LevelValidator.js';
 import LEVELS from './levels.js';
 import { SPAWN_INTERVAL, STATES } from './constants.js';
 
-const SHOW_TERRAIN_DIMENSIONS = true;
+const SHOW_TERRAIN_DIMENSIONS = false;
 
 // Initialize canvas and context
 const canvas = document.getElementById('gameCanvas');
@@ -154,15 +154,6 @@ function getHoveredSkillButton(x, y) {
     return null;
 }
 
-function getClickedDebugLevelButton(x, y) {
-    const debugLayout = getDebugLevelMenuLayout(LEVELS.length);
-    for (const { levelIndex, rect } of debugLayout) {
-        if (isPointInBounds(x, y, rect)) {
-            return levelIndex;
-        }
-    }
-    return null;
-}
 
 // Mouse move handler
 canvas.addEventListener('mousemove', (e) => {
@@ -187,14 +178,6 @@ canvas.addEventListener('mousemove', (e) => {
             return;
         }
         canvas.style.cursor = 'default';
-        return;
-    }
-
-    // Check if hovering over debug level menu
-    const hoveredDebugLevel = getClickedDebugLevelButton(mouseX, mouseY);
-    if (hoveredDebugLevel !== null) {
-        canvas.style.cursor = 'pointer';
-        hoveredLemming = null;
         return;
     }
 
@@ -273,14 +256,6 @@ canvas.addEventListener('click', (e) => {
                 return;
             }
         }
-    }
-
-    // Check if debug level menu was clicked (always active)
-    const clickedDebugLevel = getClickedDebugLevelButton(clickX, clickY);
-    if (clickedDebugLevel !== null) {
-        console.log(`Switching to Level ${clickedDebugLevel + 1}`);
-        loadLevel(clickedDebugLevel);
-        return;
     }
 
     // Don't allow skill selection or lemming clicks if game is over
@@ -488,7 +463,18 @@ function update(dt) {
         const unspawnedLemmings = MAX_LEMMINGS - lemmingsSpawned;
         const maxPossibleSaves = lemmingsSaved + activeLemmings + unspawnedLemmings;
 
-        if (maxPossibleSaves < saveTarget) {
+        // Check if only blockers remain and no bombers available
+        const onlyBlockersRemain = lemmings.length > 0 &&
+                                    lemmings.every(l => l.state === STATES.BLOCKING || l.state === STATES.DEAD);
+        const noBombersLeft = (skills.bomber || 0) === 0;
+        const allLemmingsSpawned = lemmingsSpawned >= MAX_LEMMINGS;
+
+        if (onlyBlockersRemain && noBombersLeft && allLemmingsSpawned) {
+            // Only blockers left and can't free them - game over
+            gameState = 'lost';
+            finalTime = gameTimer;
+            console.log(`Level Failed! Only blockers remain with no bombers available`);
+        } else if (maxPossibleSaves < saveTarget) {
             // Impossible to win - not enough lemmings can be saved
             gameState = 'lost';
             finalTime = gameTimer;
