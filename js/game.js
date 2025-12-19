@@ -55,7 +55,7 @@ let lemmingsDead = 0;
 let lemmingsSaved = 0;
 
 // Game state and timer
-let gameState = 'playing'; // 'playing', 'won', 'lost'
+let gameState = 'start'; // 'start', 'playing', 'won', 'lost'
 let gameTimer = 0; // Time elapsed in seconds
 let finalTime = 0; // Time when game ended
 
@@ -162,7 +162,7 @@ canvas.addEventListener('mousemove', (e) => {
     mouseY = e.clientY - rect.top;
 
     // Check if hovering over restart button when game is won or lost
-    if (gameState === 'won' || gameState === 'lost') {
+    if (gameState === 'start' || gameState === 'won' || gameState === 'lost') {
         const boxWidth = 400;
         const boxHeight = 300;
         const boxX = (canvas.width - boxWidth) / 2;
@@ -351,8 +351,23 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
 });
 
+// Start screen: press any key to begin
+let hasStarted = false;
+document.addEventListener('keydown', (e) => {
+    if (gameState === 'start' && !hasStarted) {
+        hasStarted = true;
+        gameState = 'playing';
+        loadLevel(0);
+    }
+});
+
 // Update game state
 function update(dt) {
+    // Skip updates if on start screen
+    if (gameState === 'start') {
+        return;
+    }
+
     // Update entrance/exit visuals
     entrance.update(dt);
     if (exitPortal) {
@@ -515,6 +530,84 @@ function render() {
     // Clear canvas with background color
     ctx.fillStyle = '#2d3748';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Draw start screen overlay if in start state
+    if (gameState === 'start') {
+        console.log('Rendering start screen...');
+        // Semi-transparent dark background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Main title "Lemmings"
+        ctx.fillStyle = '#22c55e';
+        ctx.font = 'bold 80px "Press Start 2P", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('Lemmings', canvas.width / 2, 80);
+
+        // Game objective
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = 'bold 18px "Fredoka", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('Guide the lemmings to safety!', canvas.width / 2, 200);
+
+        // Instructions box
+        const boxX = 150;
+        const boxY = 270;
+        const boxWidth = canvas.width - 300;
+        const boxHeight = 300;
+
+        // Box background
+        ctx.fillStyle = 'rgba(30, 27, 75, 0.9)';
+        ctx.strokeStyle = '#8b5cf6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        // Instructions title
+        ctx.fillStyle = '#a855f7';
+        ctx.font = 'bold 20px "Fredoka", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText('KEYBOARD SHORTCUTS:', boxX + 20, boxY + 20);
+
+        // Skill hotkeys
+        const skills = [
+            { key: '1', name: 'Blocker', desc: 'Stops a lemming in place' },
+            { key: '2', name: 'Digger', desc: 'Digs downward through terrain' },
+            { key: '3', name: 'Builder', desc: 'Creates bridges upward' },
+            { key: '4', name: 'Basher', desc: 'Breaks through walls' },
+            { key: '5', name: 'Bomber', desc: 'Explodes after 5 seconds' },
+            { key: '6', name: 'Climber', desc: 'Climbs vertical surfaces' }
+        ];
+
+        ctx.font = 'bold 14px "Fredoka", sans-serif';
+        ctx.fillStyle = '#f1f5f9';
+        let yOffset = boxY + 55;
+        skills.forEach(skill => {
+            ctx.fillStyle = '#22c55e';
+            ctx.fillText(`[${skill.key}]`, boxX + 20, yOffset);
+            ctx.fillStyle = '#f1f5f9';
+            ctx.fillText(`${skill.name} - ${skill.desc}`, boxX + 70, yOffset);
+            yOffset += 32;
+        });
+
+        // Press any key message
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 20px "Fredoka", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height - 80);
+
+        // Restore context and return early to skip game rendering
+        if (screenShake > 0) {
+            ctx.restore();
+        }
+        return;
+    }
 
     // Draw terrain
     terrain.render(ctx);
@@ -872,8 +965,7 @@ function gameLoop(currentTime) {
     requestAnimationFrame(gameLoop);
 }
 
-// Initialize first level and start the game loop
+// Initialize and start the game loop (level loads after start screen)
 console.log('Canvas initialized:', canvas.width, 'x', canvas.height);
-loadLevel(0);
-console.log('Starting game loop...');
+console.log('Showing start screen...');
 requestAnimationFrame(gameLoop);
