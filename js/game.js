@@ -361,6 +361,23 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Easter egg: F12 makes all lemmings explode
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'F12' && gameState === 'playing') {
+        e.preventDefault();
+        let bombersApplied = 0;
+        lemmings.forEach(lemming => {
+            if (lemming.bomberCountdown === -1 && lemming.state !== STATES.DEAD) {
+                lemming.bomberCountdown = 300;
+                bombersApplied++;
+            }
+        });
+        if (bombersApplied > 0) {
+            console.log(`Easter egg activated! Applied bomber to ${bombersApplied} lemmings!`);
+        }
+    }
+});
+
 // Update game state
 function update(dt) {
     // Skip updates if on start screen
