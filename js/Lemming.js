@@ -730,6 +730,35 @@ export default class Lemming {
         ctx.fill();
         ctx.stroke();
 
+        // Draw green curly hair on top of head
+        ctx.fillStyle = '#22c55e'; // Bright green
+        ctx.strokeStyle = '#16a34a'; // Darker green outline
+        ctx.lineWidth = 1;
+
+        // Left hair curl
+        ctx.beginPath();
+        ctx.arc(headX - 3, headY - headRadius + 1, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Middle-left hair curl
+        ctx.beginPath();
+        ctx.arc(headX - 1, headY - headRadius - 0.5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Middle-right hair curl
+        ctx.beginPath();
+        ctx.arc(headX + 1, headY - headRadius - 0.5, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Right hair curl
+        ctx.beginPath();
+        ctx.arc(headX + 3, headY - headRadius + 1, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
         // Draw eyes (two small white circles)
         ctx.fillStyle = '#fff';
 
