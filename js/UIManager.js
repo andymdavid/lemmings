@@ -1,6 +1,6 @@
 import { MAX_LEMMINGS } from './constants.js';
 
-export const SKILL_BUTTON_ORDER = ['blocker', 'digger', 'builder', 'bomber', 'climber'];
+export const SKILL_BUTTON_ORDER = ['blocker', 'digger', 'builder', 'basher', 'bomber', 'climber'];
 const SKILL_BUTTON_WIDTH = 150;
 const SKILL_BUTTON_HEIGHT = 40;
 const SKILL_BUTTON_SPACING = 20;
@@ -32,13 +32,65 @@ export function getSkillButtonBounds(canvasWidth, canvasHeight) {
     return bounds;
 }
 
+// Debug level menu constants
+const DEBUG_MENU_MARGIN = 10;
+const DEBUG_BUTTON_WIDTH = 60;
+const DEBUG_BUTTON_HEIGHT = 30;
+const DEBUG_BUTTON_SPACING = 5;
+
+export function getDebugLevelMenuLayout(totalLevels) {
+    const buttons = [];
+    for (let i = 0; i < totalLevels; i++) {
+        buttons.push({
+            levelIndex: i,
+            rect: {
+                x: DEBUG_MENU_MARGIN,
+                y: DEBUG_MENU_MARGIN + i * (DEBUG_BUTTON_HEIGHT + DEBUG_BUTTON_SPACING),
+                width: DEBUG_BUTTON_WIDTH,
+                height: DEBUG_BUTTON_HEIGHT
+            }
+        });
+    }
+    return buttons;
+}
+
 export default class UIManager {
     constructor(canvas) {
         this.canvas = canvas;
     }
 
     render(ctx, gameState) {
-        const { lemmingsSpawned, lemmingsDead, lemmingsSaved, skills, selectedSkill, fps, deltaTime, gameState: currentGameState } = gameState;
+        const { lemmingsSpawned, lemmingsDead, lemmingsSaved, skills, selectedSkill, fps, deltaTime, gameState: currentGameState, levelName, levelIndex, totalLevels } = gameState;
+
+        // Draw debug level menu (bottom left corner)
+        const debugLayout = getDebugLevelMenuLayout(totalLevels);
+        ctx.font = '14px "Space Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        debugLayout.forEach(({ levelIndex: idx, rect }) => {
+            const isCurrentLevel = idx === levelIndex;
+
+            // Button background
+            ctx.fillStyle = isCurrentLevel ? 'rgba(139, 92, 246, 0.6)' : 'rgba(15, 23, 42, 0.6)';
+            ctx.strokeStyle = isCurrentLevel ? '#c4b5fd' : '#4b5563';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(rect.x, rect.y, rect.width, rect.height, 4);
+            ctx.fill();
+            ctx.stroke();
+
+            // Button text
+            ctx.fillStyle = isCurrentLevel ? '#f8fafc' : '#94a3b8';
+            ctx.fillText(`Lvl ${idx + 1}`, rect.x + rect.width / 2, rect.y + rect.height / 2);
+        });
+
+        // Draw level name at top center
+        ctx.fillStyle = '#f1f5f9';
+        ctx.font = 'bold 26px "Fredoka", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`Level ${levelIndex + 1}: ${levelName}`, this.canvas.width / 2, 15);
 
         // Draw UI - Lemming counter (now pinned to top-right)
         ctx.fillStyle = '#f1f5f9';
@@ -46,15 +98,15 @@ export default class UIManager {
         ctx.textAlign = 'right';
         ctx.textBaseline = 'top';
         const statsX = this.canvas.width - 20;
-        ctx.fillText(`Out: ${lemmingsSpawned} / ${MAX_LEMMINGS}`, statsX, 20);
+        ctx.fillText(`Out: ${lemmingsSpawned} / ${MAX_LEMMINGS}`, statsX, 50);
 
         // Draw saved counter beneath stats
         ctx.fillStyle = '#22c55e';
-        ctx.fillText(`Saved: ${lemmingsSaved}`, statsX, 50);
+        ctx.fillText(`Saved: ${lemmingsSaved}`, statsX, 80);
 
         // Draw dead counter beneath saved
         ctx.fillStyle = '#ef4444';
-        ctx.fillText(`Dead: ${lemmingsDead}`, statsX, 80);
+        ctx.fillText(`Dead: ${lemmingsDead}`, statsX, 110);
 
         // Draw FPS counter (debug) in top-left
         ctx.fillStyle = '#f1f5f9';

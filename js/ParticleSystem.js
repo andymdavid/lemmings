@@ -47,6 +47,9 @@ export default class ParticleSystem {
 
         // Exit particles array
         this.exitParticles = [];
+
+        // Bash particles array
+        this.bashParticles = [];
     }
 
     spawnDigParticles(x, y, count) {
@@ -168,6 +171,32 @@ export default class ParticleSystem {
         }
     }
 
+    spawnBashParticles(x, y) {
+        // Spawn particles that fly horizontally when terrain is destroyed (3-5 brown particles)
+        const count = Math.floor(Math.random() * 3) + 3; // 3-5 particles
+        for (let i = 0; i < count; i++) {
+            // Spread particles mostly horizontally (between -30 and 30 degrees)
+            const angle = (Math.random() * Math.PI / 3) - Math.PI / 6;
+            const speed = Math.random() * 2.5 + 1.5; // Random speed 1.5-4
+
+            this.bashParticles.push({
+                x: x,
+                y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: Math.random() * 1.5 + 1.5, // 1.5-3px
+                life: 25, // frames
+                maxLife: 25,
+                // Brown/tan color variations
+                color: {
+                    r: 139 + Math.random() * 40 - 20,
+                    g: 69 + Math.random() * 30 - 15,
+                    b: 19 + Math.random() * 20 - 10
+                }
+            });
+        }
+    }
+
     update(dt) {
         this.animationFrame++;
 
@@ -254,6 +283,29 @@ export default class ParticleSystem {
             particle.life--;
             if (particle.life <= 0) {
                 this.exitParticles.splice(i, 1);
+            }
+        }
+
+        // Update bash particles
+        for (let i = this.bashParticles.length - 1; i >= 0; i--) {
+            const particle = this.bashParticles[i];
+
+            // Apply gravity
+            particle.vy += 0.15;
+
+            // Update position
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+
+            // Slow down horizontal movement (friction)
+            particle.vx *= 0.96;
+
+            // Decrease life
+            particle.life--;
+
+            // Remove dead particles
+            if (particle.life <= 0) {
+                this.bashParticles.splice(i, 1);
             }
         }
     }
@@ -368,6 +420,15 @@ export default class ParticleSystem {
             ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
             ctx.fill();
             ctx.shadowBlur = 0;
+        });
+
+        // Draw bash particles
+        this.bashParticles.forEach(particle => {
+            const alpha = particle.life / particle.maxLife; // Fade out over time
+            ctx.fillStyle = `rgba(${particle.color.r}, ${particle.color.g}, ${particle.color.b}, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            ctx.fill();
         });
     }
 }

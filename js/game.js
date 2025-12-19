@@ -1,39 +1,22 @@
 import Lemming from './Lemming.js';
 import TerrainManager from './TerrainManager.js';
 import ParticleSystem from './ParticleSystem.js';
-import UIManager, { getSkillButtonBounds, SKILL_BUTTON_ORDER } from './UIManager.js';
+import UIManager, { getSkillButtonBounds, getDebugLevelMenuLayout, SKILL_BUTTON_ORDER } from './UIManager.js';
 import LevelValidator from './LevelValidator.js';
-import LEVEL_1 from './levels.js';
-import { MAX_LEMMINGS, SPAWN_INTERVAL, STATES } from './constants.js';
+import LEVELS from './levels.js';
+import { SPAWN_INTERVAL, STATES } from './constants.js';
+
+const SHOW_TERRAIN_DIMENSIONS = true;
 
 // Initialize canvas and context
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Validate level before starting
-const validator = new LevelValidator(canvas.width, canvas.height);
-const validation = validator.validate(LEVEL_1);
-
-console.log('=== LEVEL VALIDATION ===');
-console.log(`Level: ${LEVEL_1.metadata?.name || 'Unnamed'}`);
-console.log(`Valid: ${validation.valid}`);
-
-if (validation.errors.length > 0) {
-    console.error('ERRORS:');
-    validation.errors.forEach(error => console.error(`  - ${error}`));
-}
-
-if (validation.warnings.length > 0) {
-    console.warn('WARNINGS:');
-    validation.warnings.forEach(warning => console.warn(`  - ${warning}`));
-}
-
-if (LEVEL_1.metadata?.requiredSkills) {
-    console.log('Required Skills:', LEVEL_1.metadata.requiredSkills);
-}
-
-console.log(`Sections: ${LEVEL_1.sections?.length || 0}`);
-console.log('========================');
+// Level management
+let currentLevelIndex = 0;
+let currentLevel = null;
+let MAX_LEMMINGS = 20;
+let saveTarget = 16;
 
 // Game state
 let lastTime = 0;
@@ -46,38 +29,26 @@ let fpsUpdateTime = 0;
 
 // Terrain
 const terrain = new TerrainManager(canvas.width, canvas.height);
-terrain.initializeFromLevel(LEVEL_1);
 
-// Exit configuration
-const exitConfig = LEVEL_1.exit;
-// Position exit on the ground floor (y=640 from levels.js ground terrain)
-const floorY = 640;
+// Water zones
+let waterZones = [];
+let waterTime = 0;
 
-const SHOW_EXIT_PORTAL = true;
-
-// Entrance and exit portals
-const entrance = new ParticleSystem(LEVEL_1.entrance.x, LEVEL_1.entrance.y, { theme: 'entrance' });
+// Level-specific objects (will be initialized in loadLevel)
+let exitConfig = null;
+let entrance = null;
 let exitPortal = null;
-if (SHOW_EXIT_PORTAL) {
-    const exitCenterX = exitConfig.position.x + exitConfig.dimensions.width / 2;
-    const exitBottomY = floorY;
-    exitPortal = new ParticleSystem(exitCenterX, exitBottomY, {
-        theme: 'exit',
-        width: exitConfig.dimensions.width,
-        height: exitConfig.dimensions.height
-    });
-}
 
 // UI Manager
 const uiManager = new UIManager(canvas);
-const skillButtonBounds = getSkillButtonBounds(canvas.width, canvas.height);
+let skillButtonBounds = getSkillButtonBounds(canvas.width, canvas.height);
 const skillHotkeyMap = {};
 SKILL_BUTTON_ORDER.forEach((skill, index) => {
     skillHotkeyMap[(index + 1).toString()] = skill;
 });
 
 // Lemmings array
-const lemmings = [];
+let lemmings = [];
 let spawnTimer = 0;
 let lemmingsSpawned = 0;
 let lemmingsDead = 0;
@@ -89,14 +60,64 @@ let gameTimer = 0; // Time elapsed in seconds
 let finalTime = 0; // Time when game ended
 
 // Skill inventory
-const skills = {
-    blocker: 5,
-    digger: 5,
-    builder: 5,
-    bomber: 5,
-    climber: 5
-};
+let skills = {};
 let selectedSkill = 'blocker';
+
+// Load level function
+function loadLevel(levelIndex) {
+    console.log(`Loading Level ${levelIndex + 1}...`);
+
+    // Get level data
+    currentLevel = LEVELS[levelIndex];
+    currentLevelIndex = levelIndex;
+    MAX_LEMMINGS = currentLevel.totalLemmings;
+    saveTarget = currentLevel.saveTarget;
+
+    // Reset game state
+    lemmings = [];
+    spawnTimer = 0;
+    lemmingsSpawned = 0;
+    lemmingsDead = 0;
+    lemmingsSaved = 0;
+    gameState = 'playing';
+    gameTimer = 0;
+    finalTime = 0;
+
+    // Initialize terrain
+    terrain.initializeFromLevel(currentLevel);
+
+    // Set up entrance
+    entrance = new ParticleSystem(currentLevel.entrance.x, currentLevel.entrance.y, { theme: 'entrance' });
+
+    // Set up exit
+    if (currentLevel.exit) {
+        const floorY = currentLevel.ground ? currentLevel.ground.y : 640;
+        exitConfig = {
+            position: { x: currentLevel.exit.x, y: currentLevel.exit.y },
+            dimensions: { width: 40, height: 60 }
+        };
+
+        const exitCenterX = exitConfig.position.x + exitConfig.dimensions.width / 2;
+        const exitBottomY = floorY;
+        exitPortal = new ParticleSystem(exitCenterX, exitBottomY, {
+            theme: 'exit',
+            width: exitConfig.dimensions.width,
+            height: exitConfig.dimensions.height
+        });
+    }
+
+    waterZones = currentLevel.water || [];
+    waterTime = 0;
+
+    // Initialize skills from level data
+    skills = { ...currentLevel.skills };
+    selectedSkill = Object.keys(skills).find(skill => skills[skill] > 0) || 'blocker';
+
+    console.log(`Level ${levelIndex + 1}: ${currentLevel.name}`);
+    console.log(`Design Intent: ${currentLevel.designIntent}`);
+    console.log(`Skills:`, skills);
+    console.log(`Target: ${saveTarget}/${MAX_LEMMINGS}`);
+}
 
 // Screen shake effect
 let screenShake = 0; // Number of frames remaining for shake
@@ -133,6 +154,16 @@ function getHoveredSkillButton(x, y) {
     return null;
 }
 
+function getClickedDebugLevelButton(x, y) {
+    const debugLayout = getDebugLevelMenuLayout(LEVELS.length);
+    for (const { levelIndex, rect } of debugLayout) {
+        if (isPointInBounds(x, y, rect)) {
+            return levelIndex;
+        }
+    }
+    return null;
+}
+
 // Mouse move handler
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
@@ -156,6 +187,14 @@ canvas.addEventListener('mousemove', (e) => {
             return;
         }
         canvas.style.cursor = 'default';
+        return;
+    }
+
+    // Check if hovering over debug level menu
+    const hoveredDebugLevel = getClickedDebugLevelButton(mouseX, mouseY);
+    if (hoveredDebugLevel !== null) {
+        canvas.style.cursor = 'pointer';
+        hoveredLemming = null;
         return;
     }
 
@@ -185,23 +224,63 @@ canvas.addEventListener('click', (e) => {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // Check for restart button click if game is won or lost
+    // Check for button clicks if game is won or lost
     if (gameState === 'won' || gameState === 'lost') {
         const boxWidth = 400;
         const boxHeight = 300;
         const boxX = (canvas.width - boxWidth) / 2;
         const boxY = (canvas.height - boxHeight) / 2;
-        const buttonWidth = 200;
+        const buttonWidth = 180;
         const buttonHeight = 50;
-        const buttonX = (canvas.width - buttonWidth) / 2;
+        const buttonSpacing = 20;
         const buttonY = boxY + boxHeight - 80;
 
-        if (clickX >= buttonX && clickX <= buttonX + buttonWidth &&
-            clickY >= buttonY && clickY <= buttonY + buttonHeight) {
-            // Restart the game
-            location.reload();
-            return;
+        if (gameState === 'won') {
+            const hasNextLevel = currentLevelIndex < LEVELS.length - 1;
+
+            if (hasNextLevel) {
+                // Check Next Level button (left)
+                const nextButtonX = canvas.width / 2 - buttonWidth - buttonSpacing / 2;
+                if (clickX >= nextButtonX && clickX <= nextButtonX + buttonWidth &&
+                    clickY >= buttonY && clickY <= buttonY + buttonHeight) {
+                    loadLevel(currentLevelIndex + 1);
+                    return;
+                }
+
+                // Check Restart button (right)
+                const restartButtonX = canvas.width / 2 + buttonSpacing / 2;
+                if (clickX >= restartButtonX && clickX <= restartButtonX + buttonWidth &&
+                    clickY >= buttonY && clickY <= buttonY + buttonHeight) {
+                    loadLevel(currentLevelIndex);
+                    return;
+                }
+            } else {
+                // Check Restart button (centered) - last level
+                const buttonX = (canvas.width - buttonWidth) / 2;
+                if (clickX >= buttonX && clickX <= buttonX + buttonWidth &&
+                    clickY >= buttonY && clickY <= buttonY + buttonHeight) {
+                    loadLevel(currentLevelIndex);
+                    return;
+                }
+            }
+        } else if (gameState === 'lost') {
+            // Check Restart button (centered)
+            const buttonWidth = 200;
+            const buttonX = (canvas.width - buttonWidth) / 2;
+            if (clickX >= buttonX && clickX <= buttonX + buttonWidth &&
+                clickY >= buttonY && clickY <= buttonY + buttonHeight) {
+                loadLevel(currentLevelIndex);
+                return;
+            }
         }
+    }
+
+    // Check if debug level menu was clicked (always active)
+    const clickedDebugLevel = getClickedDebugLevelButton(clickX, clickY);
+    if (clickedDebugLevel !== null) {
+        console.log(`Switching to Level ${clickedDebugLevel + 1}`);
+        loadLevel(clickedDebugLevel);
+        return;
     }
 
     // Don't allow skill selection or lemming clicks if game is over
@@ -253,6 +332,14 @@ canvas.addEventListener('click', (e) => {
                     lemming.buildStartY = lemming.y;
                     skills.builder--;
                     console.log(`Assigned builder to lemming. Remaining: ${skills.builder}`);
+                }
+            } else if (selectedSkill === 'basher' && skills.basher > 0) {
+                // Can only assign basher if lemming is walking
+                if (lemming.state === STATES.WALKING) {
+                    // Always set ready to bash - lemming will walk until it physically hits a wall
+                    lemming.readyToBash = true;
+                    skills.basher--;
+                    console.log(`Assigned basher to lemming. Remaining: ${skills.basher}`);
                 }
             } else if (selectedSkill === 'bomber' && skills.bomber > 0) {
                 // Can assign bomber to any lemming that's not already a bomber or dead
@@ -311,20 +398,32 @@ function update(dt) {
     lemmings.forEach(lemming => {
         lemming.update(dt, terrain, lemmings, entrance);
 
+        if (isLemmingInWater(lemming)) {
+            if (lemming.state !== STATES.DEAD) {
+                lemming.state = STATES.DEAD;
+                lemming.vx = 0;
+                lemming.vy = 0;
+            }
+        }
+
         // Check for explosion and trigger screen shake
         if (lemming.justExploded) {
             screenShake = SCREEN_SHAKE_FRAMES;
             lemming.justExploded = false; // Reset flag
         }
 
-        // Wrap around screen edges
-        if (lemming.x > canvas.width + 20) {
-            lemming.x = -20;
-        }
-        if (lemming.x < -20) {
-            lemming.x = canvas.width + 20;
-        }
+    // Prevent lemmings from wrapping around the screen (respect solid walls)
+    if (lemming.x > canvas.width - 5) {
+        lemming.x = canvas.width - 5;
+        lemming.direction = -1;
+    }
+    if (lemming.x < 5) {
+        lemming.x = 5;
+        lemming.direction = 1;
+    }
     });
+
+    waterTime += dt;
 
     // Check exit collision for lemmings
     if (exitPortal) {
@@ -379,13 +478,12 @@ function update(dt) {
         const activeLemmings = lemmings.filter(l => l.state !== STATES.DEAD).length;
         const unspawnedLemmings = MAX_LEMMINGS - lemmingsSpawned;
         const maxPossibleSaves = lemmingsSaved + activeLemmings + unspawnedLemmings;
-        const targetSaves = Math.ceil(MAX_LEMMINGS * 0.8); // 16 for 20 lemmings
 
-        if (maxPossibleSaves < targetSaves) {
+        if (maxPossibleSaves < saveTarget) {
             // Impossible to win - not enough lemmings can be saved
             gameState = 'lost';
             finalTime = gameTimer;
-            console.log(`Level Failed! Only ${maxPossibleSaves} can be saved (need ${targetSaves})`);
+            console.log(`Level Failed! Only ${maxPossibleSaves} can be saved (need ${saveTarget})`);
         }
     }
 
@@ -393,7 +491,7 @@ function update(dt) {
     if (gameState === 'playing' && lemmingsSpawned >= MAX_LEMMINGS && lemmings.length === 0) {
         // All lemmings have been spawned and all are either saved or dead
         const winPercentage = (lemmingsSaved / MAX_LEMMINGS) * 100;
-        if (winPercentage >= 80) {
+        if (lemmingsSaved >= saveTarget) {
             gameState = 'won';
             finalTime = gameTimer;
             console.log(`Level Complete! ${lemmingsSaved}/${MAX_LEMMINGS} saved (${winPercentage.toFixed(1)}%) in ${finalTime.toFixed(1)}s`);
@@ -426,6 +524,12 @@ function render() {
     // Draw terrain
     terrain.render(ctx);
 
+    renderWater(ctx);
+
+    if (SHOW_TERRAIN_DIMENSIONS) {
+        renderTerrainDimensions(ctx);
+    }
+
     // Draw entrance/exit
     entrance.render(ctx);
     if (exitPortal) {
@@ -447,7 +551,10 @@ function render() {
         selectedSkill,
         fps,
         deltaTime,
-        gameState
+        gameState,
+        levelName: currentLevel ? currentLevel.name : '',
+        levelIndex: currentLevelIndex,
+        totalLevels: LEVELS.length
     };
     uiManager.render(ctx, uiState);
 
@@ -495,23 +602,58 @@ function render() {
         const timeStr = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
         ctx.fillText(`Time: ${timeStr}`, canvas.width / 2, boxY + 195);
 
-        // Restart button
-        const buttonWidth = 200;
+        // Buttons
+        const buttonWidth = 180;
         const buttonHeight = 50;
-        const buttonX = (canvas.width - buttonWidth) / 2;
+        const buttonSpacing = 20;
         const buttonY = boxY + boxHeight - 80;
 
-        ctx.fillStyle = '#8b5cf6';
-        ctx.strokeStyle = '#c4b5fd';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
-        ctx.fill();
-        ctx.stroke();
+        // Check if there's a next level
+        const hasNextLevel = currentLevelIndex < LEVELS.length - 1;
 
-        ctx.fillStyle = '#f8fafc';
-        ctx.font = 'bold 20px "Fredoka", sans-serif';
-        ctx.fillText('Restart', canvas.width / 2, buttonY + buttonHeight / 2);
+        if (hasNextLevel) {
+            // Next Level button (left)
+            const nextButtonX = canvas.width / 2 - buttonWidth - buttonSpacing / 2;
+            ctx.fillStyle = '#22c55e';
+            ctx.strokeStyle = '#16a34a';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(nextButtonX, buttonY, buttonWidth, buttonHeight, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = 'bold 20px "Fredoka", sans-serif';
+            ctx.fillText('Next Level', nextButtonX + buttonWidth / 2, buttonY + buttonHeight / 2);
+
+            // Restart button (right)
+            const restartButtonX = canvas.width / 2 + buttonSpacing / 2;
+            ctx.fillStyle = '#8b5cf6';
+            ctx.strokeStyle = '#c4b5fd';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(restartButtonX, buttonY, buttonWidth, buttonHeight, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = 'bold 20px "Fredoka", sans-serif';
+            ctx.fillText('Restart', restartButtonX + buttonWidth / 2, buttonY + buttonHeight / 2);
+        } else {
+            // Only Restart button (centered) - last level
+            const buttonX = (canvas.width - buttonWidth) / 2;
+            ctx.fillStyle = '#8b5cf6';
+            ctx.strokeStyle = '#c4b5fd';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.roundRect(buttonX, buttonY, buttonWidth, buttonHeight, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = 'bold 20px "Fredoka", sans-serif';
+            ctx.fillText('Restart', canvas.width / 2, buttonY + buttonHeight / 2);
+        }
     }
 
     // Draw failure overlay if lost
@@ -583,6 +725,139 @@ function render() {
     }
 }
 
+function renderTerrainDimensions(ctx) {
+    if (!currentLevel?.sections) return;
+
+    ctx.save();
+    ctx.font = '12px "Space Mono", monospace';
+    ctx.fillStyle = 'rgba(241, 245, 249, 0.95)';
+    ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.lineWidth = 2;
+
+    currentLevel.sections.forEach(section => {
+        (section.terrain || []).forEach((rect, rectIndex) => {
+            const explicitLabel = rect?.label;
+            const labelChar = explicitLabel || getTerrainLabel(section, rectIndex, rect);
+            const widthLabel = `${rect.width}px`;
+            const heightLabel = `${rect.height}px`;
+
+            if (rect.height < currentLevel.height - 10) {
+                // Draw width label centered above the rectangle
+                const widthX = rect.x + rect.width / 2;
+                const widthY = Math.max(10, rect.y - 10);
+                drawLabel(ctx, widthLabel, widthX, widthY);
+
+                // Draw height label rotated along the left side of the rectangle
+                ctx.save();
+                ctx.translate(Math.max(10, rect.x - 8), rect.y + rect.height / 2);
+                ctx.rotate(-Math.PI / 2);
+                drawLabel(ctx, heightLabel, 0, 0);
+                ctx.restore();
+            }
+
+            // Optional guide lines to emphasize measurements
+            ctx.strokeStyle = 'rgba(148, 163, 184, 0.6)';
+            ctx.beginPath();
+            ctx.moveTo(rect.x, rect.y - 2);
+            ctx.lineTo(rect.x + rect.width, rect.y - 2);
+            ctx.moveTo(rect.x - 2, rect.y);
+            ctx.lineTo(rect.x - 2, rect.y + rect.height);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+
+            // Draw central label identifier (A, B, C, ...)
+            if (labelChar) {
+                drawLabel(ctx, labelChar, rect.x + rect.width / 2, rect.y + rect.height / 2);
+            }
+        });
+    });
+
+    ctx.restore();
+}
+
+function renderWater(ctx) {
+    if (!waterZones.length) return;
+
+    waterZones.forEach(zone => {
+        const gradient = ctx.createLinearGradient(0, zone.y, 0, zone.y + zone.height);
+        gradient.addColorStop(0, 'rgba(125, 211, 252, 0.9)');
+        gradient.addColorStop(1, 'rgba(14, 165, 233, 0.9)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+
+        const waveAmplitude = 4;
+        const waveLength = 40;
+        const speed = 2;
+        const surfaceY = zone.y + 6;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(zone.x, surfaceY);
+        for (let x = 0; x <= zone.width; x += 4) {
+            const y = surfaceY + Math.sin((x / waveLength) + waterTime * speed) * waveAmplitude;
+            ctx.lineTo(zone.x + x, y);
+        }
+        ctx.lineTo(zone.x + zone.width, zone.y + zone.height);
+        ctx.lineTo(zone.x, zone.y + zone.height);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.6)';
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let x = 0; x <= zone.width; x += 20) {
+            const y = surfaceY + Math.sin(((x + 10) / waveLength) + waterTime * (speed * 1.2)) * (waveAmplitude * 0.8);
+            ctx.moveTo(zone.x + x, y);
+            ctx.lineTo(zone.x + x + 10, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+    });
+}
+
+function isLemmingInWater(lemming) {
+    if (!waterZones.length) return false;
+    return waterZones.some(zone =>
+        lemming.x >= zone.x && lemming.x <= zone.x + zone.width &&
+        lemming.y >= zone.y
+    );
+}
+
+function drawLabel(ctx, text, x, y) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const metrics = ctx.measureText(text);
+    const paddingX = 4;
+    const paddingY = 2;
+    const width = metrics.width + paddingX * 2;
+    const height = 12 + paddingY * 2;
+
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(x - width / 2, y - height / 2, width, height, 4);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(241, 245, 249, 0.95)';
+    ctx.fillText(text, x, y);
+    ctx.restore();
+}
+
+function getTerrainLabel(section, rectIndex, rect) {
+    if (!section || !currentLevel) return null;
+    if (rect?.label) return rect.label;
+    if (rect?.height && rect.height >= currentLevel.height - 10) {
+        return null;
+    }
+    if (section.label) return section.label;
+    const sections = currentLevel.sections;
+    const sectionIndex = Math.max(0, sections.indexOf(section));
+    const code = 65 + sectionIndex + rectIndex;
+    if (code > 90) return null;
+    return String.fromCharCode(code);
+}
+
 // Main game loop
 function gameLoop(currentTime) {
     // Calculate delta time in seconds
@@ -602,7 +877,8 @@ function gameLoop(currentTime) {
     requestAnimationFrame(gameLoop);
 }
 
-// Start the game loop
+// Initialize first level and start the game loop
 console.log('Canvas initialized:', canvas.width, 'x', canvas.height);
+loadLevel(0);
 console.log('Starting game loop...');
 requestAnimationFrame(gameLoop);

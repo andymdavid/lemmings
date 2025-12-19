@@ -19,7 +19,22 @@ export default class TerrainManager {
         );
     }
 
+    clear() {
+        // Clear all terrain and regenerate color map
+        this.grid = Array(this.height).fill(null).map(() => Array(this.width).fill(false));
+        this.colorMap = Array(this.height).fill(null).map(() =>
+            Array(this.width).fill(null).map(() => ({
+                r: COLORS.TERRAIN_BASE_R + Math.random() * 30 - 15,
+                g: COLORS.TERRAIN_BASE_G + Math.random() * 20 - 10,
+                b: COLORS.TERRAIN_BASE_B + Math.random() * 20 - 10
+            }))
+        );
+    }
+
     initializeFromLevel(levelData) {
+        // Clear existing terrain first
+        this.clear();
+
         // Get flattened terrain array from new level format
         const terrain = LevelValidator.flattenTerrain(levelData);
 

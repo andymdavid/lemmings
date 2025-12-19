@@ -64,6 +64,11 @@ export default class Lemming {
         this.bomberCountdown = -1; // -1 = not a bomber, 0-300 = countdown frames
         this.justExploded = false; // Flag to trigger screen shake
 
+        // Bashing state
+        this.bashCycleCount = 0; // Number of bash cycles completed (max 15)
+        this.readyToBash = false; // Ready to bash when hitting a wall
+        this.bashProgress = 0; // How many 10px chunks have been bashed in current cycle (0-5)
+
         // Permanent abilities
         this.isClimber = false; // Can climb walls
     }
@@ -137,8 +142,7 @@ export default class Lemming {
         }
 
         // Apply horizontal movement
-        if (this.state === STATES.WALKING ||
-            this.state === STATES.FALLING) {
+        if (this.state === STATES.WALKING) {
             this.vx = WALK_SPEED * this.direction;
 
             const checkX = this.x + (this.direction * (this.width / 2 + 2));
@@ -158,9 +162,38 @@ export default class Lemming {
                 }
             }
 
-            if ((hitWall || hitBlocker) && this.state === STATES.WALKING) {
+            if (hitWall || hitBlocker) {
                 if (hitBlocker) {
                     this.direction *= -1;
+                } else if (this.readyToBash) {
+                    // For bashers, check for a wall at the EXACT bash height (not entire vertical column)
+                    // Check right in front at the height where the basher will carve
+                    const bashCheckX = this.x + (this.direction * 6);
+                    let wallAtBashHeight = false;
+
+                    // Only check at the middle of the bash area (not top or bottom of wall)
+                    const bashCenterY = this.y - 11; // Middle of the 22px tall bash area
+                    const checkRadius = 5; // Check 5px above and below center
+
+                    for (let checkY = bashCenterY - checkRadius; checkY <= bashCenterY + checkRadius; checkY += 2) {
+                        if (terrain.isSolid(bashCheckX, checkY)) {
+                            wallAtBashHeight = true;
+                            break;
+                        }
+                    }
+
+                    if (wallAtBashHeight) {
+                        // Wall is at bash height - start bashing
+                        this.state = STATES.BASHING;
+                        this.bashCycleCount = 0;
+                        this.bashProgress = 0;
+                        this.readyToBash = false;
+                        this.vx = 0;
+                        this.vy = 0;
+                    } else {
+                        // No wall at bash height, keep walking (may be walking through cleared tunnel)
+                        this.x += this.vx;
+                    }
                 } else if (hitWall && terrain && this.tryStepUp(terrain)) {
                     this.x += this.vx;
                 } else if (hitWall && this.isClimber) {
@@ -176,6 +209,9 @@ export default class Lemming {
                 // Move horizontally
                 this.x += this.vx;
             }
+        } else if (this.state === STATES.FALLING) {
+            // Drop straight down when falling
+            this.vx = 0;
         }
 
         // Handle digging behavior
@@ -341,11 +377,78 @@ export default class Lemming {
             }
         }
 
+        // Handle bashing behavior
+        if (this.state === STATES.BASHING && terrain) {
+            // Swing pickaxe every 10 frames and remove a chunk
+            if (this.animationFrame % 10 === 0) {
+                // Remove an 11px wide chunk of terrain directly in front of basher (5 chunks = 55px total)
+                const chunkWidth = 11;
+                const bashX = this.x + (this.direction * 10); // 10px in front of lemming
+                const bashY = this.y - 22; // Start at ground level and extend upward 22px
+
+                terrain.removeTerrainRect(bashX, bashY, chunkWidth, 22);
+
+                // Spawn bash particles when terrain is removed
+                if (particleSystem) {
+                    particleSystem.spawnBashParticles(bashX, bashY);
+                }
+
+                // Increment progress
+                this.bashProgress++;
+
+                // After 5 chunks (55px total), move forward and check if we should continue
+                if (this.bashProgress >= 5) {
+                    // Move forward into the cleared area (X only, keep Y locked)
+                    this.x += this.direction * 11;
+                    // Lock Y position to prevent any drift
+                    // Y stays exactly the same as when bashing started
+
+                    this.bashCycleCount++;
+                    this.bashProgress = 0; // Reset for next cycle
+
+                    // Only check for stopping conditions between cycles (not during bashing)
+                    // Check if there's terrain ahead to continue bashing
+                    const checkX = this.x + (this.direction * 20); // Check further ahead
+                    let hasTerrainAhead = false;
+                    for (let checkY = this.y - 22; checkY < this.y; checkY += 4) {
+                        if (terrain.isSolid(checkX, checkY)) {
+                            hasTerrainAhead = true;
+                            break;
+                        }
+                    }
+
+                    // Check stopping conditions:
+                    // 1. Broke through to empty space
+                    // 2. Completed 15 bash cycles
+                    if (!hasTerrainAhead || this.bashCycleCount >= 15) {
+                        // Stop bashing - check if we should walk or fall
+                        const hasGroundBelow = terrain.isSolid(this.x, this.y + 1);
+                        if (hasGroundBelow) {
+                            this.state = STATES.WALKING;
+                            this.vx = WALK_SPEED * this.direction;
+                            this.vy = 0;
+                        } else {
+                            this.state = STATES.FALLING;
+                            this.fallStartY = this.y;
+                            this.vx = 0;
+                            this.vy = 0;
+                        }
+                        this.bashCycleCount = 0;
+                        this.bashProgress = 0;
+                    }
+                }
+            }
+
+            // Keep basher completely stationary while bashing (no drift)
+            this.vx = 0;
+            this.vy = 0;
+        }
+
         // Apply vertical movement
         this.y += this.vy;
 
-        // Ground collision detection (skip for climbers)
-        if (terrain && this.state !== STATES.CLIMBING) {
+        // Ground collision detection (skip for climbers and bashers)
+        if (terrain && this.state !== STATES.CLIMBING && this.state !== STATES.BASHING) {
             // Check for ground within a small range below the lemming's feet (not just at exact position)
             // This allows lemmings to detect and land on builder steps
             let groundBelow = false;
@@ -361,41 +464,67 @@ export default class Lemming {
             }
 
             if (groundBelow) {
-                // If ground is below us, move down close to it (or push up if inside it)
-                if (groundDistance > 0) {
-                    // Keep a 1px buffer above terrain so we don't snap into it
-                    const snapDistance = Math.max(groundDistance - 1, 0);
-                    if (snapDistance > 0) {
-                        this.y += snapDistance;
-                    }
-                } else {
-                    // We're inside terrain - push up until on surface
-                    while (terrain.isSolid(this.x, this.y) && this.y > 0) {
-                        this.y -= 1;
+                // CRITICAL: Only land if we're falling ONTO a surface from above, not sliding past a wall
+                // The lemming moves horizontally first, so by now we may have drifted into a block's X position
+
+                // Check if there's terrain in the vertical space between current position and detected ground
+                // If yes, we're falling THROUGH/BESIDE a block, not onto its top
+                let clearVerticalPath = true;
+
+                if (groundDistance > 1) {
+                    // Check the vertical column from current Y down to detected ground
+                    // Start checking 1 pixel above current position to avoid false positives
+                    for (let checkDist = -1; checkDist < groundDistance - 1; checkDist++) {
+                        if (terrain.isSolid(this.x, this.y + checkDist)) {
+                            clearVerticalPath = false;
+                            break;
+                        }
                     }
                 }
 
-                this.vy = 0;
+                // Only snap to ground if:
+                // 1. There's a clear vertical path (we're truly falling onto the top), OR
+                // 2. We're touching/inside terrain at current position (groundDistance <= 1)
+                if (clearVerticalPath || groundDistance <= 1) {
+                    // If ground is below us, move down close to it (or push up if inside it)
+                    if (groundDistance > 0) {
+                        // Keep a 1px buffer above terrain so we don't snap into it
+                        const snapDistance = Math.max(groundDistance - 1, 0);
+                        if (snapDistance > 0) {
+                            this.y += snapDistance;
+                        }
+                    } else {
+                        // We're inside terrain - push up until on surface
+                        while (terrain.isSolid(this.x, this.y) && this.y > 0) {
+                            this.y -= 1;
+                        }
+                    }
+                    this.vy = 0;
 
-                // Transition from falling to walking (unless blocking)
-                if (this.state === STATES.FALLING) {
-                    this.fallDistance = this.y - this.fallStartY;
-                    this.fallStartY = 0;
+                    // Transition from falling to walking (unless blocking)
+                    if (this.state === STATES.FALLING) {
+                        this.fallDistance = this.y - this.fallStartY;
+                        this.fallStartY = 0;
 
-                    // Apply fall damage if fall distance is too great
-                    if (this.fallDistance > MAX_SAFE_FALL) {
-                        this.state = STATES.DEAD;
+                        // Apply fall damage if fall distance is too great
+                        if (this.fallDistance > MAX_SAFE_FALL) {
+                            this.state = STATES.DEAD;
+                            this.vx = 0;
+                            this.vy = 0;
+                        } else {
+                            this.state = STATES.WALKING;
+                        }
+                    }
+
+                    // Keep blocker stationary on ground
+                    if (this.state === STATES.BLOCKING) {
                         this.vx = 0;
                         this.vy = 0;
-                    } else {
-                        this.state = STATES.WALKING;
                     }
-                }
-
-                // Keep blocker stationary on ground
-                if (this.state === STATES.BLOCKING) {
-                    this.vx = 0;
-                    this.vy = 0;
+                } else {
+                    // Terrain in vertical path - we're falling beside/through a block, not onto its top
+                    // Continue falling and don't snap to this ground
+                    groundBelow = false;
                 }
             } else if (this.state === STATES.WALKING) {
                 // Check for ledge - look ahead for ground
@@ -424,6 +553,15 @@ export default class Lemming {
     }
 
     render(ctx, isHovered = false) {
+        // Ready to bash indicator - yellow glow
+        if (this.readyToBash && this.state !== STATES.DEAD) {
+            ctx.save();
+            ctx.shadowColor = '#eab308'; // Yellow glow
+            ctx.shadowBlur = 20;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
         // Hover glow effect
         if (isHovered && this.state !== STATES.DEAD) {
             ctx.save();
@@ -486,6 +624,8 @@ export default class Lemming {
             bobOffset = Math.sin(this.animationFrame / 4) * 0.8; // Medium bob for building
         } else if (this.state === STATES.CLIMBING) {
             bobOffset = Math.sin(this.animationFrame / 6) * 0.5; // Climbing animation
+        } else if (this.state === STATES.BASHING) {
+            bobOffset = Math.sin(this.animationFrame / 4) * 0.6; // Bashing animation
         }
 
         // Flip horizontally based on direction
@@ -508,6 +648,7 @@ export default class Lemming {
         const isDigging = this.state === STATES.DIGGING;
         const isBuilding = this.state === STATES.BUILDING;
         const isClimbing = this.state === STATES.CLIMBING;
+        const isBashing = this.state === STATES.BASHING;
 
         let bodyColor, outlineColor;
         if (isBlocking) {
@@ -519,6 +660,9 @@ export default class Lemming {
         } else if (isBuilding) {
             bodyColor = COLORS.LEMMING_BUILDER;
             outlineColor = COLORS.LEMMING_BUILDER_OUTLINE;
+        } else if (isBashing) {
+            bodyColor = COLORS.LEMMING_BASHER;
+            outlineColor = COLORS.LEMMING_BASHER_OUTLINE;
         } else if (this.isClimber) {
             // Climbers are always purple (permanent ability)
             bodyColor = COLORS.LEMMING_CLIMBER;
@@ -721,10 +865,59 @@ export default class Lemming {
             ctx.stroke();
         }
 
+        // Draw basher arms (if bashing)
+        if (this.state === STATES.BASHING) {
+            ctx.strokeStyle = outlineColor;
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+
+            // Animated swinging motion - arms swinging forward and back
+            const swingOffset = Math.sin(this.animationFrame / 4) * 4;
+
+            // Right arm (swinging forward in direction of bash)
+            ctx.beginPath();
+            ctx.moveTo(this.x + 3, this.y - 10);
+            ctx.lineTo(this.x + (8 * this.direction), this.y - 8 + swingOffset);
+            ctx.stroke();
+
+            // Left arm (supporting)
+            ctx.beginPath();
+            ctx.moveTo(this.x - 3, this.y - 10);
+            ctx.lineTo(this.x - 1, this.y - 7);
+            ctx.stroke();
+
+            // Pickaxe tool (in front of basher)
+            ctx.fillStyle = '#71717a';
+            ctx.strokeStyle = '#27272a';
+            ctx.lineWidth = 1.5;
+
+            // Pickaxe head
+            ctx.beginPath();
+            ctx.moveTo(this.x + (7 * this.direction), this.y - 8 + swingOffset);
+            ctx.lineTo(this.x + (10 * this.direction), this.y - 10 + swingOffset);
+            ctx.lineTo(this.x + (9 * this.direction), this.y - 6 + swingOffset);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Pickaxe handle
+            ctx.strokeStyle = '#78716c';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(this.x + (8 * this.direction), this.y - 8 + swingOffset);
+            ctx.lineTo(this.x + (7 * this.direction), this.y - 9 + swingOffset);
+            ctx.stroke();
+        }
+
         ctx.restore();
 
         // Clear hover glow shadow
         if (isHovered && this.state !== STATES.DEAD) {
+            ctx.restore();
+        }
+
+        // Clear ready to bash glow shadow
+        if (this.readyToBash && this.state !== STATES.DEAD) {
             ctx.restore();
         }
 
