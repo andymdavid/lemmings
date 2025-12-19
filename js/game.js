@@ -353,13 +353,29 @@ document.addEventListener('keydown', (e) => {
 
 // Start screen: press any key to begin
 let hasStarted = false;
-document.addEventListener('keydown', (e) => {
-    if (gameState === 'start' && !hasStarted) {
-        hasStarted = true;
-        gameState = 'playing';
-        loadLevel(0);
+function beginGame() {
+    if (gameState !== 'start' || hasStarted) {
+        return;
     }
+    hasStarted = true;
+    gameState = 'playing';
+    loadLevel(0);
+}
+
+document.addEventListener('keydown', () => {
+    beginGame();
 });
+
+document.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse') {
+        return;
+    }
+    beginGame();
+});
+
+document.addEventListener('touchstart', () => {
+    beginGame();
+}, { passive: true });
 
 // Easter egg: F12 makes all lemmings explode
 document.addEventListener('keydown', (e) => {

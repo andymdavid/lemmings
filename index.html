@@ -18,7 +18,21 @@
         <canvas id="gameCanvas" width="1200" height="700"></canvas>
     </div>
 
+    <div id="mobileOrientationOverlay" class="mobile-orientation-overlay" role="alertdialog" aria-hidden="true">
+        <div class="mobile-orientation-overlay__panel">
+            <p class="mobile-orientation-overlay__eyebrow">Rotate Device</p>
+            <h1 class="mobile-orientation-overlay__title">Landscape required</h1>
+            <p class="mobile-orientation-overlay__message">
+                Turn your phone or tablet sideways so the full battlefield fits on screen.
+            </p>
+            <p class="mobile-orientation-overlay__hint">
+                Once you're in landscape, tap anywhere to start.
+            </p>
+        </div>
+    </div>
+
     <!-- Game Module -->
     <script type="module" src="js/game.js"></script>
+    <script type="module" src="js/mobileSupport.js"></script>
 </body>
 </html>
