@@ -93,7 +93,8 @@ const skills = {
     blocker: 5,
     digger: 5,
     builder: 5,
-    bomber: 5
+    bomber: 5,
+    climber: 5
 };
 let selectedSkill = 'blocker';
 
@@ -259,6 +260,13 @@ canvas.addEventListener('click', (e) => {
                     lemming.bomberCountdown = 300; // 5 seconds at 60fps
                     skills.bomber--;
                     console.log(`Assigned bomber to lemming. Remaining: ${skills.bomber}`);
+                }
+            } else if (selectedSkill === 'climber' && skills.climber > 0) {
+                // Can assign climber to any lemming that's not dead and not already a climber
+                if (!lemming.isClimber && lemming.state !== STATES.DEAD) {
+                    lemming.isClimber = true; // Permanent ability
+                    skills.climber--;
+                    console.log(`Assigned climber to lemming. Remaining: ${skills.climber}`);
                 }
             }
             break;

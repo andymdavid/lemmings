@@ -4,6 +4,7 @@ import {
     TERMINAL_VELOCITY,
     MAX_SAFE_FALL,
     DIG_SPEED,
+    CLIMB_SPEED,
     STATES,
     LEMMING_WIDTH,
     LEMMING_HEIGHT,
@@ -62,6 +63,9 @@ export default class Lemming {
         // Bomber state
         this.bomberCountdown = -1; // -1 = not a bomber, 0-300 = countdown frames
         this.justExploded = false; // Flag to trigger screen shake
+
+        // Permanent abilities
+        this.isClimber = false; // Can climb walls
     }
 
     update(dt, terrain, allLemmings = [], particleSystem = null) {
@@ -159,6 +163,11 @@ export default class Lemming {
                     this.direction *= -1;
                 } else if (hitWall && terrain && this.tryStepUp(terrain)) {
                     this.x += this.vx;
+                } else if (hitWall && this.isClimber) {
+                    // Climber hits a wall - start climbing
+                    this.state = STATES.CLIMBING;
+                    this.vx = 0;
+                    this.vy = 0;
                 } else {
                     // Reverse direction when hitting a wall or blocker
                     this.direction *= -1;
@@ -297,11 +306,46 @@ export default class Lemming {
             this.vy = 0;
         }
 
+        // Handle climbing behavior
+        if (this.state === STATES.CLIMBING && terrain) {
+            // Move upward along the wall
+            this.y -= CLIMB_SPEED;
+
+            // Check if there's still a wall in front to climb (check multiple points)
+            const checkX = this.x + (this.direction * (this.width / 2 + 1));
+            const hasWallInFront = terrain.isSolid(checkX, this.y) ||
+                                   terrain.isSolid(checkX, this.y - 5) ||
+                                   terrain.isSolid(checkX, this.y - 10);
+
+            // Check if reached the top (no wall above but still wall at current level)
+            const hasWallAbove = terrain.isSolid(checkX, this.y - this.height);
+
+            if (!hasWallAbove && hasWallInFront) {
+                // Reached the top of the wall - transition to walking on top
+                this.state = STATES.WALKING;
+                this.y -= 5; // Move up a bit more
+                this.x += this.direction * (this.width + 2); // Move over the ledge
+                this.vx = WALK_SPEED * this.direction;
+                this.vy = 0;
+            } else if (!hasWallInFront) {
+                // Wall ended while climbing - fall
+                this.state = STATES.FALLING;
+                this.fallStartY = this.y;
+                this.vx = WALK_SPEED * this.direction;
+            }
+
+            // Keep climber stationary horizontally while climbing
+            if (this.state === STATES.CLIMBING) {
+                this.vx = 0;
+                this.vy = 0;
+            }
+        }
+
         // Apply vertical movement
         this.y += this.vy;
 
-        // Ground collision detection
-        if (terrain) {
+        // Ground collision detection (skip for climbers)
+        if (terrain && this.state !== STATES.CLIMBING) {
             // Check for ground within a small range below the lemming's feet (not just at exact position)
             // This allows lemmings to detect and land on builder steps
             let groundBelow = false;
@@ -440,6 +484,8 @@ export default class Lemming {
             bobOffset = Math.sin(this.animationFrame / 5) * 0.5; // Faster, smaller bob for digging
         } else if (this.state === STATES.BUILDING) {
             bobOffset = Math.sin(this.animationFrame / 4) * 0.8; // Medium bob for building
+        } else if (this.state === STATES.CLIMBING) {
+            bobOffset = Math.sin(this.animationFrame / 6) * 0.5; // Climbing animation
         }
 
         // Flip horizontally based on direction
@@ -457,10 +503,11 @@ export default class Lemming {
         const bodyX = this.x - bodyWidth / 2;
         const bodyY = this.y - bodyHeight + bobOffset;
 
-        // Choose color based on state
+        // Choose color based on state or permanent abilities
         const isBlocking = this.state === STATES.BLOCKING;
         const isDigging = this.state === STATES.DIGGING;
         const isBuilding = this.state === STATES.BUILDING;
+        const isClimbing = this.state === STATES.CLIMBING;
 
         let bodyColor, outlineColor;
         if (isBlocking) {
@@ -472,6 +519,10 @@ export default class Lemming {
         } else if (isBuilding) {
             bodyColor = COLORS.LEMMING_BUILDER;
             outlineColor = COLORS.LEMMING_BUILDER_OUTLINE;
+        } else if (this.isClimber) {
+            // Climbers are always purple (permanent ability)
+            bodyColor = COLORS.LEMMING_CLIMBER;
+            outlineColor = COLORS.LEMMING_CLIMBER_OUTLINE;
         } else {
             bodyColor = COLORS.LEMMING_NORMAL;
             outlineColor = COLORS.LEMMING_NORMAL_OUTLINE;
@@ -648,22 +699,32 @@ export default class Lemming {
             ctx.stroke();
         }
 
+        // Draw climber arms (if climbing)
+        if (this.state === STATES.CLIMBING) {
+            ctx.strokeStyle = outlineColor;
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+
+            // Animated climbing motion - arms reaching upward alternately
+            const climbOffset = Math.sin(this.animationFrame / 6) * 3;
+
+            // Left arm (reaching up)
+            ctx.beginPath();
+            ctx.moveTo(this.x - 3, this.y - 10);
+            ctx.lineTo(this.x - 2, this.y - 16 - climbOffset);
+            ctx.stroke();
+
+            // Right arm (reaching up, offset from left)
+            ctx.beginPath();
+            ctx.moveTo(this.x + 3, this.y - 10);
+            ctx.lineTo(this.x + 2, this.y - 16 + climbOffset);
+            ctx.stroke();
+        }
+
         ctx.restore();
 
         // Clear hover glow shadow
         if (isHovered && this.state !== STATES.DEAD) {
-            ctx.restore();
-        }
-
-        // Debug: Show fall distance if lemming recently fell
-        if (this.fallDistance > 0) {
-            ctx.save();
-            // Red if dangerous fall, yellow if safe
-            ctx.fillStyle = this.fallDistance > MAX_SAFE_FALL ? '#ef4444' : '#fbbf24';
-            ctx.font = '10px "Space Mono", monospace';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(`-${Math.floor(this.fallDistance)}`, this.x, this.y - this.height - 5);
             ctx.restore();
         }
 

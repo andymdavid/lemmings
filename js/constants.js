@@ -4,6 +4,7 @@ export const GRAVITY = 0.4;
 export const TERMINAL_VELOCITY = 8;
 export const MAX_SAFE_FALL = 160;
 export const DIG_SPEED = 0.33; // pixels per frame downward while digging (~10% faster)
+export const CLIMB_SPEED = 1; // pixels per frame upward while climbing
 
 // Game configuration
 export const MAX_LEMMINGS = 20;
@@ -16,6 +17,7 @@ export const STATES = {
     BLOCKING: 'blocking',
     DIGGING: 'digging',
     BUILDING: 'building',
+    CLIMBING: 'climbing',
     BOMBER: 'bomber',
     EXPLODING: 'exploding',
     DEAD: 'dead',
@@ -38,6 +40,8 @@ export const COLORS = {
     LEMMING_DIGGER_OUTLINE: '#92400e',
     LEMMING_BUILDER: '#eab308',
     LEMMING_BUILDER_OUTLINE: '#a16207',
+    LEMMING_CLIMBER: '#a855f7',
+    LEMMING_CLIMBER_OUTLINE: '#7e22ce',
     TERRAIN_BASE_R: 139,
     TERRAIN_BASE_G: 69,
     TERRAIN_BASE_B: 19,

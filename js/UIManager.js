@@ -1,6 +1,6 @@
 import { MAX_LEMMINGS } from './constants.js';
 
-export const SKILL_BUTTON_ORDER = ['blocker', 'digger', 'builder', 'bomber'];
+export const SKILL_BUTTON_ORDER = ['blocker', 'digger', 'builder', 'bomber', 'climber'];
 const SKILL_BUTTON_WIDTH = 150;
 const SKILL_BUTTON_HEIGHT = 40;
 const SKILL_BUTTON_SPACING = 20;
