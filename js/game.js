@@ -16,7 +16,8 @@ const ctx = canvas.getContext('2d');
 let currentLevelIndex = 0;
 let currentLevel = null;
 let MAX_LEMMINGS = 20;
-let saveTarget = 16;
+let saveTarget = 11;
+const EARLY_WIN_THRESHOLD = 10; // End the level once more than this many are saved
 
 // Game state
 let lastTime = 0;
@@ -408,7 +409,7 @@ function update(dt) {
     }
 
     // Spawn lemmings
-    if (lemmingsSpawned < MAX_LEMMINGS) {
+    if (gameState === 'playing' && lemmingsSpawned < MAX_LEMMINGS) {
         spawnTimer += dt;
         if (spawnTimer >= SPAWN_INTERVAL) {
             spawnTimer = 0;
@@ -420,33 +421,35 @@ function update(dt) {
     }
 
     // Update all lemmings
-    lemmings.forEach(lemming => {
-        lemming.update(dt, terrain, lemmings, entrance);
+    if (gameState === 'playing') {
+        lemmings.forEach(lemming => {
+            lemming.update(dt, terrain, lemmings, entrance);
 
-        if (isLemmingInWater(lemming)) {
-            if (lemming.state !== STATES.DEAD) {
-                lemming.state = STATES.DEAD;
-                lemming.vx = 0;
-                lemming.vy = 0;
+            if (isLemmingInWater(lemming)) {
+                if (lemming.state !== STATES.DEAD) {
+                    lemming.state = STATES.DEAD;
+                    lemming.vx = 0;
+                    lemming.vy = 0;
+                }
             }
-        }
 
-        // Check for explosion and trigger screen shake
-        if (lemming.justExploded) {
-            screenShake = SCREEN_SHAKE_FRAMES;
-            lemming.justExploded = false; // Reset flag
-        }
+            // Check for explosion and trigger screen shake
+            if (lemming.justExploded) {
+                screenShake = SCREEN_SHAKE_FRAMES;
+                lemming.justExploded = false; // Reset flag
+            }
 
-    // Prevent lemmings from wrapping around the screen (respect solid walls)
-    if (lemming.x > canvas.width - 5) {
-        lemming.x = canvas.width - 5;
-        lemming.direction = -1;
+            // Prevent lemmings from wrapping around the screen (respect solid walls)
+            if (lemming.x > canvas.width - 5) {
+                lemming.x = canvas.width - 5;
+                lemming.direction = -1;
+            }
+            if (lemming.x < 5) {
+                lemming.x = 5;
+                lemming.direction = 1;
+            }
+        });
     }
-    if (lemming.x < 5) {
-        lemming.x = 5;
-        lemming.direction = 1;
-    }
-    });
 
     waterTime += dt;
 
@@ -463,20 +466,30 @@ function update(dt) {
             height: exitConfig.dimensions.height
         };
 
-        for (let i = lemmings.length - 1; i >= 0; i--) {
-            const lemming = lemmings[i];
-            // Only walking or falling lemmings can exit (alive states)
-            if ((lemming.state === STATES.WALKING || lemming.state === STATES.FALLING) &&
-                lemming.state !== STATES.SAVED) {
-                // Check if lemming's center point is inside exit bounds
-                if (isPointInBounds(lemming.x, lemming.y, exitBounds)) {
-                    lemming.state = STATES.SAVED;
-                    // Spawn exit particles with flash effect
-                    exitPortal.spawnExitParticles(lemming.x, lemming.y);
-                    // Remove from active array
-                    lemmings.splice(i, 1);
-                    // Increment saved counter
-                    lemmingsSaved++;
+        if (gameState === 'playing') {
+            for (let i = lemmings.length - 1; i >= 0; i--) {
+                const lemming = lemmings[i];
+                // Only walking or falling lemmings can exit (alive states)
+                if ((lemming.state === STATES.WALKING || lemming.state === STATES.FALLING) &&
+                    lemming.state !== STATES.SAVED) {
+                    // Check if lemming's center point is inside exit bounds
+                    if (isPointInBounds(lemming.x, lemming.y, exitBounds)) {
+                        lemming.state = STATES.SAVED;
+                        // Spawn exit particles with flash effect
+                        exitPortal.spawnExitParticles(lemming.x, lemming.y);
+                        // Remove from active array
+                        lemmings.splice(i, 1);
+                        // Increment saved counter
+                        lemmingsSaved++;
+
+                        // Early win condition: end level once more than 10 are saved
+                        if (lemmingsSaved > EARLY_WIN_THRESHOLD) {
+                            gameState = 'won';
+                            finalTime = gameTimer;
+                            console.log(`Level Complete! ${lemmingsSaved} lemmings saved – early win threshold reached`);
+                            break;
+                        }
+                    }
                 }
             }
         }
