@@ -60,6 +60,9 @@ let gameState = 'start'; // 'start', 'playing', 'won', 'lost'
 let gameTimer = 0; // Time elapsed in seconds
 let finalTime = 0; // Time when game ended
 
+// Nostr share button bounds (set during render)
+let nostrShareButtonBounds = null;
+
 // Skill inventory
 let skills = {};
 let selectedSkill = 'blocker';
@@ -256,6 +259,27 @@ canvas.addEventListener('click', (e) => {
                 loadLevel(currentLevelIndex);
                 return;
             }
+        }
+
+        // Check Share on Nostr button (both won and lost states)
+        if (nostrShareButtonBounds &&
+            clickX >= nostrShareButtonBounds.x &&
+            clickX <= nostrShareButtonBounds.x + nostrShareButtonBounds.width &&
+            clickY >= nostrShareButtonBounds.y &&
+            clickY <= nostrShareButtonBounds.y + nostrShareButtonBounds.height) {
+            // Trigger Nostr share
+            if (typeof window.NostrUI !== 'undefined') {
+                const gameResult = {
+                    levelName: currentLevel ? currentLevel.name : 'Unknown',
+                    levelNumber: currentLevelIndex + 1,
+                    saved: lemmingsSaved,
+                    total: MAX_LEMMINGS,
+                    time: finalTime,
+                    won: gameState === 'won'
+                };
+                window.NostrUI.showPublishOverlay(gameResult);
+            }
+            return;
         }
     }
 
@@ -788,6 +812,32 @@ function render() {
             ctx.font = 'bold 20px "Fredoka", sans-serif';
             ctx.fillText('Restart', canvas.width / 2, buttonY + buttonHeight / 2);
         }
+
+        // Share on Nostr button (below other buttons)
+        const shareButtonWidth = 180;
+        const shareButtonHeight = 40;
+        const shareButtonX = (canvas.width - shareButtonWidth) / 2;
+        const shareButtonY = buttonY + buttonHeight + 15;
+
+        ctx.fillStyle = '#8b5cf6';
+        ctx.strokeStyle = '#c4b5fd';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(shareButtonX, shareButtonY, shareButtonWidth, shareButtonHeight, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 14px "Fredoka", sans-serif';
+        ctx.fillText('Share on Nostr', canvas.width / 2, shareButtonY + shareButtonHeight / 2);
+
+        // Store bounds for click detection
+        nostrShareButtonBounds = {
+            x: shareButtonX,
+            y: shareButtonY,
+            width: shareButtonWidth,
+            height: shareButtonHeight
+        };
     }
 
     // Draw failure overlay if lost
@@ -851,6 +901,32 @@ function render() {
         ctx.fillStyle = '#f8fafc';
         ctx.font = 'bold 20px "Fredoka", sans-serif';
         ctx.fillText('Restart', canvas.width / 2, buttonY + buttonHeight / 2);
+
+        // Share on Nostr button (below restart)
+        const shareButtonWidth = 180;
+        const shareButtonHeight = 40;
+        const shareButtonX = (canvas.width - shareButtonWidth) / 2;
+        const shareButtonY = buttonY + buttonHeight + 15;
+
+        ctx.fillStyle = '#8b5cf6';
+        ctx.strokeStyle = '#c4b5fd';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(shareButtonX, shareButtonY, shareButtonWidth, shareButtonHeight, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.font = 'bold 14px "Fredoka", sans-serif';
+        ctx.fillText('Share on Nostr', canvas.width / 2, shareButtonY + shareButtonHeight / 2);
+
+        // Store bounds for click detection
+        nostrShareButtonBounds = {
+            x: shareButtonX,
+            y: shareButtonY,
+            width: shareButtonWidth,
+            height: shareButtonHeight
+        };
     }
 
     // Restore canvas if screen shake was active
