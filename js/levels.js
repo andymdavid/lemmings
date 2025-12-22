@@ -71,7 +71,7 @@ const LEVEL_2 = {
     totalLemmings: 20,
     saveTarget: 12,
     entrance: STANDARD_ENTRANCE,
-    exit: { x: 1060, y: 430 },
+    exit: { x: 980, y: 580 },
     skills: { ...STANDARD_SKILLS },
     sections: [
         {
