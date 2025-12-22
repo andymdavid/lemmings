@@ -87,15 +87,19 @@ const LEVEL_2 = {
             terrain: [
                 { x: 80, y: 210, width: 200, height: 40, label: 'A' },
                 { x: 0, y: 640, width: 340, height: 60, label: 'B' },
-                { x: 200, y: 320, width: 160, height: 40, label: 'C' }
+                { x: 200, y: 320, width: 160, height: 40, label: 'C' },
+                { x: 300, y: 400, width: 120, height: 30, label: 'C1' } // midway catcher to prevent fatal fall
             ]
         },
         {
             name: "flooded_valley",
             terrain: [
                 { x: 360, y: 640, width: 40, height: 60, label: 'D' }, // narrow lip before water
+                { x: 430, y: 500, width: 150, height: 35, label: 'D1' }, // landing over first water span
                 { x: 520, y: 640, width: 200, height: 60, label: 'E' },
+                { x: 600, y: 560, width: 140, height: 30, label: 'E1' }, // midway step above the basin
                 { x: 760, y: 640, width: 180, height: 60, label: 'F' },
+                { x: 820, y: 520, width: 120, height: 30, label: 'F1' }, // step toward exit ramp
                 { x: 430, y: 420, width: 150, height: 40, label: 'G' },
                 { x: 640, y: 480, width: 60, height: 160, label: 'H' } // pillar to bash/dig through
             ]
@@ -105,7 +109,8 @@ const LEVEL_2 = {
             terrain: [
                 { x: 940, y: 580, width: 200, height: 40, label: 'I' },
                 { x: 980, y: 500, width: 140, height: 40, label: 'J' },
-                { x: 1030, y: 430, width: 90, height: 40, label: 'K' }
+                { x: 1030, y: 430, width: 90, height: 40, label: 'K' },
+                { x: 880, y: 460, width: 80, height: 30, label: 'J1' } // extra perch before final climb
             ]
         }
     ],
