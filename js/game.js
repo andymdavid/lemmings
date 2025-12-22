@@ -211,6 +211,18 @@ canvas.addEventListener('click', (e) => {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
+    // Check for level selection on start screen
+    if (gameState === 'start') {
+        for (const btn of levelSelectButtons) {
+            if (clickX >= btn.x && clickX <= btn.x + btn.width &&
+                clickY >= btn.y && clickY <= btn.y + btn.height) {
+                beginGame(btn.levelIndex);
+                return;
+            }
+        }
+        return;
+    }
+
     // Check for button clicks if game is won or lost
     if (gameState === 'won' || gameState === 'lost') {
         const boxWidth = 400;
@@ -376,31 +388,28 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
 });
 
-// Start screen: press any key to begin
+// Start screen: level selection
 let hasStarted = false;
-function beginGame() {
+let levelSelectButtons = [];
+
+function beginGame(levelIndex = 0) {
     if (gameState !== 'start' || hasStarted) {
         return;
     }
     hasStarted = true;
     gameState = 'playing';
-    loadLevel(0);
+    loadLevel(levelIndex);
 }
 
-document.addEventListener('keydown', () => {
-    beginGame();
-});
-
-document.addEventListener('pointerdown', (event) => {
-    if (event.pointerType === 'mouse') {
-        return;
+// Keyboard shortcuts for level selection (1, 2, etc.)
+document.addEventListener('keydown', (e) => {
+    if (gameState === 'start') {
+        const levelNum = parseInt(e.key);
+        if (levelNum >= 1 && levelNum <= LEVELS.length) {
+            beginGame(levelNum - 1);
+        }
     }
-    beginGame();
 });
-
-document.addEventListener('touchstart', () => {
-    beginGame();
-}, { passive: true });
 
 // Easter egg: F12 makes all lemmings explode
 document.addEventListener('keydown', (e) => {
@@ -665,12 +674,51 @@ function render() {
             yOffset += 32;
         });
 
-        // Press any key message
+        // Level selection buttons
         ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 20px "Fredoka", sans-serif';
+        ctx.font = 'bold 18px "Fredoka", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText('PRESS ANY KEY TO START', canvas.width / 2, canvas.height - 80);
+        ctx.fillText('SELECT LEVEL', canvas.width / 2, canvas.height - 130);
+
+        // Draw level buttons
+        const buttonWidth = 150;
+        const buttonHeight = 45;
+        const buttonSpacing = 20;
+        const totalWidth = LEVELS.length * buttonWidth + (LEVELS.length - 1) * buttonSpacing;
+        const startX = (canvas.width - totalWidth) / 2;
+        const buttonY = canvas.height - 95;
+
+        levelSelectButtons = []; // Reset button bounds
+
+        for (let i = 0; i < LEVELS.length; i++) {
+            const btnX = startX + i * (buttonWidth + buttonSpacing);
+
+            // Store bounds for click detection
+            levelSelectButtons.push({
+                x: btnX,
+                y: buttonY,
+                width: buttonWidth,
+                height: buttonHeight,
+                levelIndex: i
+            });
+
+            // Draw button
+            ctx.fillStyle = '#8b5cf6';
+            ctx.strokeStyle = '#c4b5fd';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(btnX, buttonY, buttonWidth, buttonHeight, 8);
+            ctx.fill();
+            ctx.stroke();
+
+            // Button text
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = 'bold 16px "Fredoka", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`Level ${i + 1}`, btnX + buttonWidth / 2, buttonY + buttonHeight / 2);
+        }
 
         // Restore context and return early to skip game rendering
         if (screenShake > 0) {
