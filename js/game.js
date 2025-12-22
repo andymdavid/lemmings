@@ -19,6 +19,28 @@ let MAX_LEMMINGS = 20;
 let saveTarget = 11;
 const EARLY_WIN_THRESHOLD = 10; // End the level once more than this many are saved
 
+// Level progress tracking
+const PROGRESS_STORAGE_KEY = 'lemmings.progress.v1';
+
+function getUnlockedLevels() {
+    try {
+        const raw = localStorage.getItem(PROGRESS_STORAGE_KEY);
+        if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return { maxUnlocked: 0 }; // Level 0 (Level 1) always unlocked
+}
+
+function unlockNextLevel(completedLevelIndex) {
+    const progress = getUnlockedLevels();
+    if (completedLevelIndex >= progress.maxUnlocked) {
+        progress.maxUnlocked = completedLevelIndex + 1;
+        try {
+            localStorage.setItem(PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+        } catch (_) {}
+    }
+    return progress;
+}
+
 // Game state
 let lastTime = 0;
 let deltaTime = 0;
@@ -216,7 +238,9 @@ canvas.addEventListener('click', (e) => {
         for (const btn of levelSelectButtons) {
             if (clickX >= btn.x && clickX <= btn.x + btn.width &&
                 clickY >= btn.y && clickY <= btn.y + btn.height) {
-                beginGame(btn.levelIndex);
+                if (btn.unlocked) {
+                    beginGame(btn.levelIndex);
+                }
                 return;
             }
         }
@@ -405,7 +429,8 @@ function beginGame(levelIndex = 0) {
 document.addEventListener('keydown', (e) => {
     if (gameState === 'start') {
         const levelNum = parseInt(e.key);
-        if (levelNum >= 1 && levelNum <= LEVELS.length) {
+        const progress = getUnlockedLevels();
+        if (levelNum >= 1 && levelNum <= LEVELS.length && (levelNum - 1) <= progress.maxUnlocked) {
             beginGame(levelNum - 1);
         }
     }
@@ -519,6 +544,7 @@ function update(dt) {
                         if (lemmingsSaved > EARLY_WIN_THRESHOLD) {
                             gameState = 'won';
                             finalTime = gameTimer;
+                            unlockNextLevel(currentLevelIndex);
                             console.log(`Level Complete! ${lemmingsSaved} lemmings saved – early win threshold reached`);
                             break;
                         }
@@ -583,6 +609,7 @@ function update(dt) {
         if (lemmingsSaved >= saveTarget) {
             gameState = 'won';
             finalTime = gameTimer;
+            unlockNextLevel(currentLevelIndex);
             console.log(`Level Complete! ${lemmingsSaved}/${MAX_LEMMINGS} saved (${winPercentage.toFixed(1)}%) in ${finalTime.toFixed(1)}s`);
         } else {
             // All lemmings processed but didn't meet win condition
@@ -688,24 +715,32 @@ function render() {
         const totalWidth = LEVELS.length * buttonWidth + (LEVELS.length - 1) * buttonSpacing;
         const startX = (canvas.width - totalWidth) / 2;
         const buttonY = canvas.height - 95;
+        const progress = getUnlockedLevels();
 
         levelSelectButtons = []; // Reset button bounds
 
         for (let i = 0; i < LEVELS.length; i++) {
             const btnX = startX + i * (buttonWidth + buttonSpacing);
+            const isUnlocked = i <= progress.maxUnlocked;
 
-            // Store bounds for click detection
+            // Store bounds for click detection (only if unlocked)
             levelSelectButtons.push({
                 x: btnX,
                 y: buttonY,
                 width: buttonWidth,
                 height: buttonHeight,
-                levelIndex: i
+                levelIndex: i,
+                unlocked: isUnlocked
             });
 
-            // Draw button
-            ctx.fillStyle = '#8b5cf6';
-            ctx.strokeStyle = '#c4b5fd';
+            // Draw button (different style for locked)
+            if (isUnlocked) {
+                ctx.fillStyle = '#8b5cf6';
+                ctx.strokeStyle = '#c4b5fd';
+            } else {
+                ctx.fillStyle = '#374151';
+                ctx.strokeStyle = '#4b5563';
+            }
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.roundRect(btnX, buttonY, buttonWidth, buttonHeight, 8);
@@ -713,11 +748,15 @@ function render() {
             ctx.stroke();
 
             // Button text
-            ctx.fillStyle = '#f8fafc';
+            ctx.fillStyle = isUnlocked ? '#f8fafc' : '#6b7280';
             ctx.font = 'bold 16px "Fredoka", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(`Level ${i + 1}`, btnX + buttonWidth / 2, buttonY + buttonHeight / 2);
+            if (isUnlocked) {
+                ctx.fillText(`Level ${i + 1}`, btnX + buttonWidth / 2, buttonY + buttonHeight / 2);
+            } else {
+                ctx.fillText(`Level ${i + 1} 🔒`, btnX + buttonWidth / 2, buttonY + buttonHeight / 2);
+            }
         }
 
         // Restore context and return early to skip game rendering
